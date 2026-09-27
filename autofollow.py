@@ -35,6 +35,7 @@ GREEN = "\033[92m"
 YELLOW = "\033[93m"
 RED = "\033[91m"
 MAGENTA = "\033[95m"
+BLUE = "\033[94m"
 BOLD = "\033[1m"
 DIM = "\033[2m"
 RESET = "\033[0m"
@@ -791,10 +792,17 @@ def run_interactive(bot: GitHubBot):
         raw_repo = input("\nEnter repository (e.g. facebook/react): ").strip()
         cleaned_repo = clean_input(raw_repo)
         if "/" not in cleaned_repo:
-            cleaned_repo = f"{cleaned_repo}/{cleaned_repo}"
+            print(f"\n{YELLOW}[!] '{cleaned_repo}' is an account/organization, not a repository.{RESET}")
+            print(f"    {GREEN}Switching automatically to following followers of @{cleaned_repo}!{RESET}")
+            mode = "user"
+            target_val = cleaned_repo
+        else:
+            mode = "repo"
+            target_val = cleaned_repo
+
         bot.gender_filter = ask_gender()
         bot.delay = ask_speed()
-        run_continuous_session(bot, mode="repo", target_val=cleaned_repo, batch_size=BATCH_SIZE)
+        run_continuous_session(bot, mode=mode, target_val=target_val, batch_size=BATCH_SIZE)
 
     elif choice == "4":
         raw = input("\nEnter usernames (separated by commas): ").strip()
