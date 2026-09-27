@@ -1,8 +1,8 @@
 <div align="center">
 
-# ⚡ GitHub Auto-Follower Pro
+# ⚡ GitHub Network Expander Pro
 
-**A blazing-fast, intelligent, and resilient CLI automation tool for GitHub networking.**
+**A blazing-fast, intelligent, and resilient CLI automation tool for GitHub networking in 250-account batches.**
 
 [![Python Version](https://img.shields.io/badge/python-3.10%2B-blue.svg?style=for-the-badge&logo=python&logoColor=white)](https://www.python.org/)
 [![GitHub license](https://img.shields.io/badge/license-MIT-green.svg?style=for-the-badge)](LICENSE)
@@ -11,7 +11,7 @@
 
 <p align="center">
   <a href="#-key-features">Key Features</a> •
-  <a href="#-speed-benchmarks">Speed Benchmarks</a> •
+  <a href="#-batch-workflow">Batch Workflow</a> •
   <a href="#-installation">Installation</a> •
   <a href="#-token-setup">Token Setup</a> •
   <a href="#-usage-guide">Usage Guide</a> •
@@ -24,31 +24,50 @@
 
 ## 🚀 Overview
 
-**GitHub Auto-Follower Pro** is a high-performance Python automation utility engineered to help developers expand their open-source network efficiently. Built with asynchronous connection pooling, in-memory pre-caching, and intelligent rate-limit backoff, it delivers the fastest possible execution speed while remaining compliant with GitHub's REST API standards.
+**GitHub Network Expander Pro** is a high-performance Python utility engineered to help developers grow their open-source network efficiently. Designed with a **250-account batch workflow**, unified styling, live percentage progress, in-memory pre-caching, and intelligent rate-limit backoff, it provides maximum speed with total reliability.
 
 ---
 
 ## ✨ Key Features
 
-- **⚡ Turbo Engine (~150 Follows/min)**: Leverages HTTP keep-alive connection pooling (`urllib3` / `requests.adapters.HTTPAdapter`) to eliminate TLS handshake overhead on every request.
-- **🧠 In-Memory Smart Cache**: Bulk pre-syncs your current following list into memory at launch. Eliminates 100% of individual check requests, doubling execution speed.
-- **🛡️ Adaptive Rate-Limit Shield**: Actively inspects response headers (`x-ratelimit-reset`, `Retry-After`). If GitHub signals secondary rate limits, the tool automatically pauses for the exact cooldown duration and resumes seamlessly.
-- **💾 Safe Pause & Auto-Resume**: Automatically tracks every processed user in `followed_history.json`. Stop at any time with `Ctrl+C` and restart without duplicate follows.
-- **🔗 Smart URL Cleaning**: Paste raw input like `https://github.com/laravel`, `@torvalds`, or `owner/repo`—the tool automatically extracts clean identifiers.
-- **🎯 Multi-Targeting Discovery**:
-  - **Account Followers**: Target followers of any individual developer or organization.
-  - **Repository Contributors**: Target active contributors of any repository.
-  - **Search Queries**: Target active developers by programming language, location, or follower count.
+- **⚡ Turbo Engine (~150 Follows/min)**: Reuses HTTP keep-alive connection pooling (`requests.adapters.HTTPAdapter`) to eliminate TLS handshake overhead.
+- **🔄 Smart 250 Batch Workflow**: Automatically follows 250 fresh accounts, displays completion stats, and prompts you to continue with the next 250 or stop.
+- **📊 Unified Progress Dashboard**: Sleek Cyan & Emerald Green theme with live percentage progress bar, remaining countdown timer, and exact finishing ETA.
+- **🧠 In-Memory Smart Cache**: Bulk pre-syncs your current following list into memory at launch. Eliminates redundant check requests, doubling execution speed.
+- **🛡️ Adaptive Rate-Limit Shield**: Actively inspects response headers (`x-ratelimit-reset`, `Retry-After`). Pauses automatically during rate limit cooldowns and resumes without dying.
+- **💾 Safe Pause & Auto-Resume**: Tracks every processed user in `followed_history.json`. Stop at any time with `Ctrl+C` and restart without duplicate follows.
+- **🔗 Smart URL Cleaning**: Paste raw input like `https://github.com/google`, `@microsoft`, or `owner/repo`—the tool automatically extracts clean identifiers.
 
 ---
 
-## 📊 Speed Benchmarks
+## 🔄 Batch Workflow
 
-| Mode | Delay | Rate | 1,000 Accounts | 10,000 Accounts | Recommended For |
-| :--- | :---: | :---: | :---: | :---: | :--- |
-| **🚀 Turbo** | `0.5s` | **~120–150 / min** | ~7 mins | ~1.2 hrs | Fast bulk networking |
-| **⚡ Fast** *(Default)* | `1.0s` | **~60 / min** | ~16 mins | ~2.8 hrs | Balanced daily use |
-| **🛡️ Safe** | `2.5s` | **~24 / min** | ~40 mins | ~7.0 hrs | Extended conservative runs |
+```text
+╭──────────────────────────────────────────────────────────────╮
+│               ⚡ BATCH #1 — TARGET: 250 FOLLOWS ⚡            │
+├──────────────────────────────────────────────────────────────┤
+│  👤 Operator:  @a4hmad1          👥 Followers: 26             │
+│  🎯 Source:    @google           🔄 Following: 537            │
+│  🎯 Batch Goal:250 accounts      ⚡ Speed:     ~120/min       │
+│  ⏱️  Est Time:  02m 05s          🏁 Batch ETA: 08:55 PM       │
+╰──────────────────────────────────────────────────────────────╯
+
+[████████████████░░░░]  78.4% (196/250) │ ⏱️ Rem: 00m 27s │ 🏁 ETA: 08:55 PM
+  → Following @johndoe... ✓ Followed!
+
+╭──────────────────────────────────────────────────────────────╮
+│                 🎉 BATCH #1 COMPLETED (250/250) 🎉           │
+├──────────────────────────────────────────────────────────────┤
+│  ✓ Followed in Batch #1:   250 accounts                       │
+│  🌟 Total in This Session: 250 accounts                       │
+│  🔄 Current Total Following: 787 accounts                     │
+│  ⏱️  Batch Time Elapsed:   02m 04s                            │
+╰──────────────────────────────────────────────────────────────╯
+
+What would you like to do next?
+  1) 🚀 Start following NEXT 250 accounts [Press Enter]
+  2) 🛑 Stop and exit session
+```
 
 ---
 
@@ -69,23 +88,18 @@ pip install -r requirements.txt
 
 ## 🔑 Token Setup
 
-The tool communicates with GitHub's REST API using a **Personal Access Token (PAT)**.
-
 1. Go to **[GitHub Token Settings (Classic)](https://github.com/settings/tokens)**.
 2. Click **Generate new token (classic)**.
-3. Set note name (e.g. `github-follower-tool`).
-4. Select **ONLY** the following scope:
-   - `[x] user:follow` (Access to follow/unfollow users).
-5. Copy your generated token.
-6. Create your `.env` file from the provided template:
+3. Select **ONLY** the scope:
+   - `[x] user:follow` (Allows following and unfollowing users).
+4. Create `.env` from template:
 ```bash
 cp .env.example .env
 ```
-7. Open `.env` and add your token:
+5. Put your token in `.env`:
 ```env
 GITHUB_TOKEN=ghp_yourTokenHere
 ```
-*(Permissions are automatically restricted to protect your secret).*
 
 ---
 
@@ -97,14 +111,11 @@ Run without flags to open the interactive command console:
 python3 autofollow.py
 ```
 ```text
-✓ Authenticated as @a4hmad1
-  Followers: 26 | Following: 218
-
-Choose target mode:
-  1) Follow followers of a user or organization (e.g. laravel, octocat)
-  2) Search users by keyword/location/language (e.g. location:Iraq)
-  3) Follow contributors of a repository (e.g. laravel/framework)
-  4) Enter specific usernames manually (comma separated)
+Choose Target Source:
+  1) Follow followers of a company or organization (e.g. google, microsoft, meta)
+  2) Search active developers by keywords (e.g. location:Iraq, language:python)
+  3) Follow contributors of a repository (e.g. facebook/react, flutter/flutter)
+  4) Enter specific usernames manually
   5) Exit
 ```
 
@@ -112,40 +123,34 @@ Choose target mode:
 
 ### 2. Command-Line Direct Modes
 
-#### A. Follow Followers of a User or Organization
+#### A. Target Company / Organization Followers
 ```bash
-# Turbo mode (max speed)
-python3 autofollow.py --user laravel --turbo
+# Follow followers of Google in 250 batches
+python3 autofollow.py --user google
 
-# Custom batch limit
-python3 autofollow.py --user https://github.com/torvalds --limit 50
+# Follow followers of Microsoft at turbo speed
+python3 autofollow.py --user microsoft --turbo
 ```
 
 #### B. Search Active Developers by Tech Stack or Location
 ```bash
 # Target Python developers in a specific country
-python3 autofollow.py --search "location:Iraq language:python" --turbo
+python3 autofollow.py --search "location:Iraq language:python"
 
-# Target developers actively participating in follow communities
-python3 autofollow.py --search "follow-back" --turbo
+# Target developers in follow-back communities
+python3 autofollow.py --search "follow-back"
 ```
 
 #### C. Follow Active Contributors of a Repository
 ```bash
-python3 autofollow.py --repo laravel/framework --turbo
-python3 autofollow.py --repo flutter/flutter --limit 100
+python3 autofollow.py --repo facebook/react
+python3 autofollow.py --repo flutter/flutter
 ```
 
 #### D. Dry-Run Mode (Simulation)
-Preview targets without sending real API requests:
+Preview targets without sending real follow requests:
 ```bash
-python3 autofollow.py --user laravel --limit 10 --dry-run
-```
-
-#### E. Custom Delay Speed
-Specify any custom delay in seconds:
-```bash
-python3 autofollow.py --user laravel --delay 0.8
+python3 autofollow.py --user google --dry-run
 ```
 
 ---
@@ -154,39 +159,9 @@ python3 autofollow.py --user laravel --delay 0.8
 
 > [!IMPORTANT]
 > **GitHub Anti-Abuse Compliance**
-> - GitHub limits standard authenticated tokens to **5,000 API requests per hour**.
-> - Write operations (such as follows) are monitored by GitHub's abuse detection algorithms.
-> - **GitHub Auto-Follower Pro** includes built-in protection:
->   - Automatic backoff on HTTP `403` / `429` status codes.
->   - Adheres to `Retry-After` headers sent by GitHub servers.
->   - Pre-caches following states to minimize unnecessary network traffic.
->   - Never stores credentials in code or repository commits.
-
----
-
-## 📂 Project Structure
-
-```text
-github-auto-follower/
-├── autofollow.py           # Core CLI automation engine
-├── requirements.txt        # Python dependencies
-├── .env.example            # Environment template for GITHUB_TOKEN
-├── .env                    # Local private token configuration (git-ignored)
-├── .gitignore              # Protects secrets & logs from commits
-├── followed_history.json   # Persistent history of followed users
-└── README.md               # Project documentation
-```
-
----
-
-## 🤝 Contributing
-
-Contributions, feature requests, and bug reports are welcome!
-1. Fork the Project.
-2. Create your Feature Branch (`git checkout -b feature/AmazingFeature`).
-3. Commit your Changes (`git commit -m 'Add some AmazingFeature'`).
-4. Push to the Branch (`git push origin feature/AmazingFeature`).
-5. Open a Pull Request.
+> - Standard personal access tokens allow up to **5,000 requests per hour**.
+> - The **250-account batch workflow** provides natural checkpoints to monitor your network growth responsibly.
+> - Automatic backoff on HTTP `403` / `429` secondary rate limits ensures your account stays safe.
 
 ---
 

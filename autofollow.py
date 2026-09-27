@@ -1,12 +1,13 @@
 #!/usr/bin/env python3
 """
-GitHub Auto-Follow Tool (High Performance Edition)
+GitHub Network Expander Pro
+A high-performance, cleanly-styled CLI tool to expand your GitHub network in 250-account batches.
 Features:
-- Beautiful UI dashboard with live progress bar and ETA clock
-- Default limit of 250 following
-- Accurate time remaining and elapsed time tracking
-- In-memory pre-caching and HTTP connection pooling
-- Auto-resume and secondary rate-limit protection
+- Unified terminal design with live percentage progress bar and ETA clock
+- Batch workflow: Follows 250 accounts, then prompts to follow the NEXT 250 or stop
+- Neutral company/organization examples (Google, Microsoft, Meta, etc.)
+- In-memory pre-caching and HTTP connection pooling for turbo speeds
+- Full rate-limit auto-cooldown and duplicate prevention
 """
 
 import os
@@ -25,18 +26,17 @@ ENV_PATH = BASE_DIR / ".env"
 HISTORY_PATH = BASE_DIR / "followed_history.json"
 GITHUB_API_BASE = "https://api.github.com"
 
-# Terminal Colors & Styling
+# Unified Styling Theme (Cyan & Emerald Green)
 CYAN = "\033[96m"
 GREEN = "\033[92m"
 YELLOW = "\033[93m"
 RED = "\033[91m"
 MAGENTA = "\033[95m"
-BLUE = "\033[94m"
 BOLD = "\033[1m"
 DIM = "\033[2m"
 RESET = "\033[0m"
 
-DEFAULT_LIMIT = 250
+BATCH_SIZE = 250
 DEFAULT_DELAY = 0.5  # Turbo speed: 0.5s
 
 
@@ -50,8 +50,8 @@ def format_duration(seconds: float) -> str:
     return f"{m:02d}m {s:02d}s"
 
 
-def render_progress_bar(current: int, total: int, width: int = 24) -> str:
-    """Renders a modern Unicode progress bar."""
+def render_progress_bar(current: int, total: int, width: int = 20) -> str:
+    """Renders a sleek, modern progress bar with accurate percentage."""
     if total <= 0:
         return f"[{'░' * width}] 0.0%"
     fraction = min(max(current / total, 0.0), 1.0)
@@ -148,11 +148,12 @@ class GitHubBot:
             "Accept": "application/vnd.github+json",
             "Authorization": f"Bearer {self.token}",
             "X-GitHub-Api-Version": "2022-11-28",
-            "User-Agent": "GitHub-AutoFollow-Design/4.0",
+            "User-Agent": "GitHub-Network-Expander/5.0",
         })
         self.current_user = ""
         self.user_stats = {}
         self.history = HistoryManager(HISTORY_PATH)
+        self.page_cursor = {}  # Tracks pagination per target to avoid re-fetching pages
 
     def verify_account(self) -> dict | None:
         """Verifies token and retrieves account information."""
@@ -162,6 +163,13 @@ class GitHubBot:
             self.current_user = self.user_stats.get("login", "")
             return self.user_stats
         return None
+
+    def refresh_user_stats(self) -> dict:
+        """Refreshes account stats from GitHub."""
+        resp = self.session.get(f"{GITHUB_API_BASE}/user")
+        if resp.status_code == 200:
+            self.user_stats = resp.json()
+        return self.user_stats
 
     def preload_current_following(self):
         """Preloads all users that current_user already follows into memory in bulk."""
@@ -220,15 +228,15 @@ class GitHubBot:
 
         return False
 
-    def get_followers_of(self, target_user: str, limit: int = DEFAULT_LIMIT) -> list[str]:
+    def get_followers_of(self, target_user: str, count: int = BATCH_SIZE) -> list[str]:
         """Fetch fresh, unfollowed followers of a given user or organization."""
         clean_user = clean_input(target_user)
         candidates = []
-        page = 1
+        page = self.page_cursor.get(clean_user, 1)
         per_page = 100
 
-        print(f"{CYAN}🔍 Collecting followers of @{clean_user}...{RESET}", end="", flush=True)
-        while len(candidates) < limit:
+        print(f"{CYAN}🔍 Collecting next {count} new accounts from @{clean_user}...{RESET}", end="", flush=True)
+        while len(candidates) < count:
             url = f"{GITHUB_API_BASE}/users/{clean_user}/followers?per_page={per_page}&page={page}"
             resp = self.session.get(url)
             if resp.status_code != 200:
@@ -240,24 +248,25 @@ class GitHubBot:
                 username = item["login"]
                 if not self.history.contains(username) and username.lower() != self.current_user.lower():
                     candidates.append(username)
-                    if len(candidates) >= limit:
+                    if len(candidates) >= count:
                         break
             if len(items) < per_page:
                 break
             page += 1
 
-        print(f" {GREEN}Found {len(candidates)} new accounts to follow.{RESET}")
+        self.page_cursor[clean_user] = page
+        print(f" {GREEN}Ready ({len(candidates)} fresh accounts found).{RESET}")
         return candidates
 
-    def get_contributors_of(self, repo: str, limit: int = DEFAULT_LIMIT) -> list[str]:
+    def get_contributors_of(self, repo: str, count: int = BATCH_SIZE) -> list[str]:
         """Fetch fresh contributors of an owner/repo."""
         clean_repo = clean_input(repo)
         candidates = []
-        page = 1
+        page = self.page_cursor.get(clean_repo, 1)
         per_page = 100
 
-        print(f"{CYAN}🔍 Collecting contributors of {clean_repo}...{RESET}", end="", flush=True)
-        while len(candidates) < limit:
+        print(f"{CYAN}🔍 Collecting next {count} new contributors from {clean_repo}...{RESET}", end="", flush=True)
+        while len(candidates) < count:
             url = f"{GITHUB_API_BASE}/repos/{clean_repo}/contributors?per_page={per_page}&page={page}"
             resp = self.session.get(url)
             if resp.status_code != 200:
@@ -270,23 +279,24 @@ class GitHubBot:
                     username = item["login"]
                     if not self.history.contains(username) and username.lower() != self.current_user.lower():
                         candidates.append(username)
-                        if len(candidates) >= limit:
+                        if len(candidates) >= count:
                             break
             if len(items) < per_page:
                 break
             page += 1
 
-        print(f" {GREEN}Found {len(candidates)} new accounts to follow.{RESET}")
+        self.page_cursor[clean_repo] = page
+        print(f" {GREEN}Ready ({len(candidates)} fresh accounts found).{RESET}")
         return candidates
 
-    def search_users(self, query: str, limit: int = DEFAULT_LIMIT) -> list[str]:
+    def search_users(self, query: str, count: int = BATCH_SIZE) -> list[str]:
         """Search fresh GitHub users matching a query."""
         candidates = []
-        page = 1
+        page = self.page_cursor.get(query, 1)
         per_page = 100
 
-        print(f"{CYAN}🔍 Searching users for '{query}'...{RESET}", end="", flush=True)
-        while len(candidates) < limit:
+        print(f"{CYAN}🔍 Collecting next {count} new accounts from '{query}'...{RESET}", end="", flush=True)
+        while len(candidates) < count:
             url = f"{GITHUB_API_BASE}/search/users?q={query}&per_page={per_page}&page={page}"
             resp = self.session.get(url)
             if resp.status_code != 200:
@@ -299,70 +309,67 @@ class GitHubBot:
                 username = item["login"]
                 if not self.history.contains(username) and username.lower() != self.current_user.lower():
                     candidates.append(username)
-                    if len(candidates) >= limit:
+                    if len(candidates) >= count:
                         break
             if len(items) < per_page:
                 break
             page += 1
 
-        print(f" {GREEN}Found {len(candidates)} new accounts to follow.{RESET}")
+        self.page_cursor[query] = page
+        print(f" {GREEN}Ready ({len(candidates)} fresh accounts found).{RESET}")
         return candidates
 
-    def print_dashboard(self, target_label: str, target_limit: int):
-        """Prints a beautiful dashboard card with ETA and time calculations."""
-        est_seconds = target_limit * self.delay
+    def print_batch_header(self, batch_num: int, target_label: str, goal: int):
+        """Displays a clean, styled dashboard card."""
+        est_seconds = goal * self.delay
         est_duration = format_duration(est_seconds)
         eta_time = time.strftime("%I:%M:%S %p", time.localtime(time.time() + est_seconds))
         speed_text = f"~{int(60 / max(self.delay, 0.1))} follows/min ({self.delay}s delay)"
+        cur_following = self.user_stats.get("following", 0)
 
         box_width = 62
-        print(f"{CYAN}╭{'─' * box_width}╮{RESET}")
-        print(f"{CYAN}│{BOLD}{'⚡ GITHUB AUTO-FOLLOWER PRO ⚡':^{box_width}}{RESET}{CYAN}│{RESET}")
+        print(f"\n{CYAN}╭{'─' * box_width}╮{RESET}")
+        title = f"⚡ BATCH #{batch_num} — TARGET: {goal} FOLLOWS ⚡"
+        print(f"{CYAN}│{BOLD}{title:^{box_width}}{RESET}{CYAN}│{RESET}")
         print(f"{CYAN}├{'─' * box_width}┤{RESET}")
-        print(f"{CYAN}│{RESET}  👤 {BOLD}Account:{RESET} @{self.current_user:<16}  👥 {BOLD}Followers:{RESET} {str(self.user_stats.get('followers', 0)):<15}{CYAN}│{RESET}")
-        print(f"{CYAN}│{RESET}  🎯 {BOLD}Target:{RESET}  {target_label:<16}  🔄 {BOLD}Following:{RESET} {str(self.user_stats.get('following', 0)):<15}{CYAN}│{RESET}")
-        print(f"{CYAN}│{RESET}  🎯 {BOLD}Goal:{RESET}    {str(target_limit) + ' follows':<16}  ⚡ {BOLD}Speed:{RESET}     {speed_text:<15}{CYAN}│{RESET}")
-        print(f"{CYAN}│{RESET}  ⏱️  {BOLD}Est Time:{RESET}{est_duration:<16}  🏁 {BOLD}ETA Time:{RESET}  {eta_time:<15}{CYAN}│{RESET}")
+        print(f"{CYAN}│{RESET}  👤 {BOLD}Operator:{RESET}  @{self.current_user:<16}  👥 {BOLD}Followers:{RESET} {str(self.user_stats.get('followers', 0)):<15}{CYAN}│{RESET}")
+        print(f"{CYAN}│{RESET}  🎯 {BOLD}Source:{RESET}    {target_label:<16}  🔄 {BOLD}Following:{RESET} {str(cur_following):<15}{CYAN}│{RESET}")
+        print(f"{CYAN}│{RESET}  🎯 {BOLD}Batch Goal:{RESET}{str(goal) + ' accounts':<16}  ⚡ {BOLD}Speed:{RESET}     {speed_text:<15}{CYAN}│{RESET}")
+        print(f"{CYAN}│{RESET}  ⏱️  {BOLD}Est Time:{RESET}  {est_duration:<16}  🏁 {BOLD}Batch ETA:{RESET} {eta_time:<15}{CYAN}│{RESET}")
         print(f"{CYAN}╰{'─' * box_width}╯{RESET}\n")
 
-    def process_targets(self, targets: list[str], target_limit: int = DEFAULT_LIMIT, target_label: str = "custom"):
-        """Executes follows up to target_limit with real-time UI, progress bar, and timers."""
+    def run_batch(self, targets: list[str], goal: int, batch_num: int, target_label: str) -> tuple[int, float]:
+        """Executes a single batch with real-time percentage progress bar and timers."""
         if not targets:
-            print(f"{YELLOW}[!] No candidates available to process.{RESET}")
-            return
+            print(f"{YELLOW}[!] No candidate accounts available.{RESET}")
+            return 0, 0.0
 
-        self.print_dashboard(target_label, target_limit)
+        self.print_batch_header(batch_num, target_label, goal)
 
         success_count = 0
-        skipped_count = 0
         start_time = time.time()
 
         try:
             for idx, username in enumerate(targets, 1):
-                if success_count >= target_limit:
+                if success_count >= goal:
                     break
 
                 if username.lower() == self.current_user.lower():
                     continue
 
-                # Instant in-memory check (0 HTTP requests!)
                 if self.history.contains(username):
-                    skipped_count += 1
                     continue
 
-                # Time calculations
-                elapsed_sec = time.time() - start_time
-                remaining_needed = target_limit - success_count
-                rem_seconds = remaining_needed * self.delay
+                # Live timer calculations
+                rem_needed = goal - success_count
+                rem_seconds = rem_needed * self.delay
                 eta_clock = time.strftime("%I:%M:%S %p", time.localtime(time.time() + rem_seconds))
-
-                progress_bar = render_progress_bar(success_count, target_limit, width=18)
-                elapsed_str = format_duration(elapsed_sec)
+                bar_str = render_progress_bar(success_count, goal, width=18)
                 rem_str = format_duration(rem_seconds)
 
-                # Status Line: Progress bar + Counts + Remaining Time
+                # Unified progress line
                 status_header = (
-                    f"{progress_bar} {BOLD}{success_count}/{target_limit}{RESET} "
+                    f"{bar_str} {BOLD}{success_count}/{goal}{RESET} "
                     f"│ ⏱️ Rem: {CYAN}{rem_str}{RESET} "
                     f"│ 🏁 ETA: {MAGENTA}{eta_clock}{RESET}"
                 )
@@ -379,43 +386,16 @@ class GitHubBot:
                 else:
                     print(f" {RED}✗ Skipped{RESET}")
 
-                print()  # Empty line for clean spacing
+                print()
 
-                # Delay between follows
-                if success_count < target_limit and self.delay > 0:
+                if success_count < goal and self.delay > 0:
                     time.sleep(self.delay)
 
         except KeyboardInterrupt:
-            print(f"\n{YELLOW}⚠️  Session paused by user (Ctrl+C).{RESET}")
+            print(f"\n{YELLOW}⚠️  Batch paused by user (Ctrl+C).{RESET}")
 
-        total_elapsed = time.time() - start_time
-        avg_speed = (success_count / total_elapsed * 60) if total_elapsed > 0 else 0
-
-        # Beautiful Session Summary Card
-        box_width = 62
-        print(f"\n{GREEN}╭{'─' * box_width}╮{RESET}")
-        print(f"{GREEN}│{BOLD}{'🎉 SESSION SUMMARY':^{box_width}}{RESET}{GREEN}│{RESET}")
-        print(f"{GREEN}├{'─' * box_width}┤{RESET}")
-        print(f"{GREEN}│{RESET}  ✓ {BOLD}Successfully Followed:{RESET} {success_count} accounts{' ' * (box_width - len(str(success_count)) - 32)}{GREEN}│{RESET}")
-        print(f"{GREEN}│{RESET}  ↷ {BOLD}Skipped (Already Followed):{RESET} {skipped_count} accounts{' ' * (box_width - len(str(skipped_count)) - 36)}{GREEN}│{RESET}")
-        print(f"{GREEN}│{RESET}  ⏱️  {BOLD}Total Time Elapsed:{RESET} {format_duration(total_elapsed)}{' ' * (box_width - len(format_duration(total_elapsed)) - 29)}{GREEN}│{RESET}")
-        print(f"{GREEN}│{RESET}  ⚡ {BOLD}Average Speed:{RESET} {avg_speed:.1f} follows/min{' ' * (box_width - len(f'{avg_speed:.1f}') - 31)}{GREEN}│{RESET}")
-        print(f"{GREEN}│{RESET}  💾 {BOLD}Progress Saved To:{RESET} followed_history.json{' ' * (box_width - 48)}{GREEN}│{RESET}")
-        print(f"{GREEN}╰{'─' * box_width}╯{RESET}\n")
-
-
-def ask_limit(default_limit: int = DEFAULT_LIMIT) -> int:
-    """Asks for limit, defaulting to 250."""
-    print(f"\n🎯 {BOLD}Follow Target Limit:{RESET}")
-    print(f"   Default is {GREEN}{BOLD}250{RESET} accounts.")
-    lim_str = input(f"   Enter limit [Press Enter for {default_limit}]: ").strip()
-    if not lim_str:
-        return default_limit
-    try:
-        limit = int(lim_str)
-        return limit if limit > 0 else default_limit
-    except ValueError:
-        return default_limit
+        batch_elapsed = time.time() - start_time
+        return success_count, batch_elapsed
 
 
 def ask_speed() -> float:
@@ -433,58 +413,118 @@ def ask_speed() -> float:
     return 0.5
 
 
-def run_interactive(bot: GitHubBot, default_limit: int = DEFAULT_LIMIT):
-    print(f"{BOLD}Choose Target Mode:{RESET}")
-    print("  1) Follow followers of a user/organization (e.g. laravel, octocat)")
-    print("  2) Search active developers (e.g. location:Iraq, language:php)")
-    print("  3) Follow contributors of a repository (e.g. laravel/framework)")
+def run_continuous_session(bot: GitHubBot, mode: str, target_val: str, batch_size: int = BATCH_SIZE):
+    """Loops in batches of 250: after each 250, prompts to follow the NEXT 250 or stop."""
+    batch_num = 1
+    total_session_followed = 0
+    total_session_time = 0.0
+
+    target_label = f"@{target_val}" if mode == "user" else target_val
+
+    while True:
+        # Fetch fresh candidates for this batch
+        if mode == "user":
+            candidates = bot.get_followers_of(target_val, count=batch_size)
+        elif mode == "search":
+            candidates = bot.search_users(target_val, count=batch_size)
+        elif mode == "repo":
+            candidates = bot.get_contributors_of(target_val, count=batch_size)
+        else:
+            candidates = [clean_input(u) for u in target_val.split(",") if clean_input(u)]
+
+        if not candidates:
+            print(f"\n{YELLOW}[!] No more fresh unfollowed accounts found from {target_label}.{RESET}")
+            break
+
+        followed, elapsed = bot.run_batch(candidates, goal=batch_size, batch_num=batch_num, target_label=target_label)
+        total_session_followed += followed
+        total_session_time += elapsed
+
+        # Refresh stats from GitHub
+        bot.refresh_user_stats()
+        current_following = bot.user_stats.get("following", 0)
+
+        # Batch Completion Card
+        box_width = 62
+        print(f"\n{GREEN}╭{'─' * box_width}╮{RESET}")
+        title = f"🎉 BATCH #{batch_num} COMPLETED ({followed}/{batch_size}) 🎉"
+        print(f"{GREEN}│{BOLD}{title:^{box_width}}{RESET}{GREEN}│{RESET}")
+        print(f"{GREEN}├{'─' * box_width}┤{RESET}")
+        print(f"{GREEN}│{RESET}  ✓ {BOLD}Followed in Batch #{batch_num}:{RESET}   {followed} accounts{' ' * (box_width - len(str(followed)) - 32)}{GREEN}│{RESET}")
+        print(f"{GREEN}│{RESET}  🌟 {BOLD}Total in This Session:{RESET}     {total_session_followed} accounts{' ' * (box_width - len(str(total_session_followed)) - 32)}{GREEN}│{RESET}")
+        print(f"{GREEN}│{RESET}  🔄 {BOLD}Current Total Following:{RESET}   {current_following} accounts{' ' * (box_width - len(str(current_following)) - 32)}{GREEN}│{RESET}")
+        print(f"{GREEN}│{RESET}  ⏱️  {BOLD}Batch Time Elapsed:{RESET}       {format_duration(elapsed)}{' ' * (box_width - len(format_duration(elapsed)) - 32)}{GREEN}│{RESET}")
+        print(f"{GREEN}╰{'─' * box_width}╯{RESET}\n")
+
+        # Prompt user to continue or stop
+        print(f"{BOLD}What would you like to do next?{RESET}")
+        print(f"  {CYAN}{BOLD}1) 🚀 Start following NEXT {batch_size} accounts{RESET} [Press Enter]")
+        print(f"  {YELLOW}2) 🛑 Stop and exit session{RESET}")
+
+        ans = input(f"\nEnter choice [1/2, default 1]: ").strip()
+        if ans == "2":
+            break
+
+        batch_num += 1
+
+    # Grand Session Summary
+    box_width = 62
+    avg_speed = (total_session_followed / total_session_time * 60) if total_session_time > 0 else 0
+    print(f"\n{CYAN}╭{'─' * box_width}╮{RESET}")
+    print(f"{CYAN}│{BOLD}{'🏆 FINAL SESSION SUMMARY':^{box_width}}{RESET}{CYAN}│{RESET}")
+    print(f"{CYAN}├{'─' * box_width}┤{RESET}")
+    print(f"{CYAN}│{RESET}  ✓ {BOLD}Total Accounts Followed:{RESET} {total_session_followed} accounts{' ' * (box_width - len(str(total_session_followed)) - 33)}{CYAN}│{RESET}")
+    print(f"{CYAN}│{RESET}  ⏱️  {BOLD}Total Time Elapsed:{RESET}      {format_duration(total_session_time)}{' ' * (box_width - len(format_duration(total_session_time)) - 33)}{CYAN}│{RESET}")
+    print(f"{CYAN}│{RESET}  ⚡ {BOLD}Average Speed:{RESET}           {avg_speed:.1f} follows/min{' ' * (box_width - len(f'{avg_speed:.1f}') - 33)}{CYAN}│{RESET}")
+    print(f"{CYAN}│{RESET}  💾 {BOLD}History Stored In:{RESET}       followed_history.json{' ' * (box_width - 43)}{CYAN}│{RESET}")
+    print(f"{CYAN}╰{'─' * box_width}╯{RESET}\n")
+
+
+def run_interactive(bot: GitHubBot):
+    print(f"{BOLD}Choose Target Source:{RESET}")
+    print("  1) Follow followers of a company or organization (e.g. google, microsoft, meta)")
+    print("  2) Search active developers by keywords (e.g. location:Iraq, language:python)")
+    print("  3) Follow contributors of a repository (e.g. facebook/react, flutter/flutter)")
     print("  4) Enter specific usernames manually")
     print("  5) Exit")
 
     choice = input("\nEnter choice [1-5]: ").strip()
 
     if choice == "1":
-        target = input("\nEnter target GitHub username or URL (e.g. laravel): ").strip()
+        target = input("\nEnter company or user account (e.g. google, microsoft): ").strip()
         cleaned = clean_input(target)
-        limit = ask_limit(default_limit)
         bot.delay = ask_speed()
-        targets = bot.get_followers_of(cleaned, limit=limit)
-        bot.process_targets(targets, target_limit=limit, target_label=f"@{cleaned}")
+        run_continuous_session(bot, mode="user", target_val=cleaned, batch_size=BATCH_SIZE)
 
     elif choice == "2":
-        query = input("\nEnter search query (e.g. location:Iraq language:python): ").strip()
-        limit = ask_limit(default_limit)
+        query = input("\nEnter search keywords (e.g. location:Iraq language:python): ").strip()
         bot.delay = ask_speed()
-        targets = bot.search_users(query, limit=limit)
-        bot.process_targets(targets, target_limit=limit, target_label=f"query:{query}")
+        run_continuous_session(bot, mode="search", target_val=query, batch_size=BATCH_SIZE)
 
     elif choice == "3":
-        raw_repo = input("\nEnter repository (e.g. laravel/framework): ").strip()
+        raw_repo = input("\nEnter repository (e.g. facebook/react): ").strip()
         cleaned_repo = clean_input(raw_repo)
         if "/" not in cleaned_repo:
             cleaned_repo = f"{cleaned_repo}/{cleaned_repo}"
-        limit = ask_limit(default_limit)
         bot.delay = ask_speed()
-        targets = bot.get_contributors_of(cleaned_repo, limit=limit)
-        bot.process_targets(targets, target_limit=limit, target_label=cleaned_repo)
+        run_continuous_session(bot, mode="repo", target_val=cleaned_repo, batch_size=BATCH_SIZE)
 
     elif choice == "4":
         raw = input("\nEnter usernames (separated by commas): ").strip()
-        targets = [clean_input(u) for u in raw.split(",") if clean_input(u)]
         bot.delay = ask_speed()
-        bot.process_targets(targets, target_limit=len(targets), target_label="custom-list")
+        run_continuous_session(bot, mode="list", target_val=raw, batch_size=BATCH_SIZE)
 
     else:
         print("Exited.")
 
 
 def main():
-    parser = argparse.ArgumentParser(description="GitHub Auto Follow Tool (Pro Design Edition)")
-    parser.add_argument("--user", help="Target username or URL to follow their followers")
+    parser = argparse.ArgumentParser(description="GitHub Network Expander Pro")
+    parser.add_argument("--user", help="Target company or user account (e.g. 'google', 'microsoft')")
     parser.add_argument("--search", help="Search query (e.g. 'location:Iraq')")
-    parser.add_argument("--repo", help="Target repository (e.g. 'laravel/laravel') to follow contributors")
+    parser.add_argument("--repo", help="Target repository (e.g. 'facebook/react') to follow contributors")
     parser.add_argument("--list", help="Comma-separated list of usernames")
-    parser.add_argument("--limit", type=int, default=DEFAULT_LIMIT, help=f"Max accounts to follow (default: {DEFAULT_LIMIT})")
+    parser.add_argument("--limit", type=int, default=BATCH_SIZE, help=f"Batch size (default: {BATCH_SIZE})")
     parser.add_argument("--delay", type=float, default=DEFAULT_DELAY, help=f"Seconds between follows (default: {DEFAULT_DELAY})")
     parser.add_argument("--turbo", action="store_true", help="Run at max speed (0.5s delay)")
     parser.add_argument("--dry-run", action="store_true", help="Simulate without making actual follow requests")
@@ -504,28 +544,19 @@ def main():
     # Sync following list
     bot.preload_current_following()
 
-    targets = []
-    target_label = "targets"
     if args.user:
-        target_label = f"@{clean_input(args.user)}"
-        targets = bot.get_followers_of(clean_input(args.user), limit=args.limit)
+        run_continuous_session(bot, mode="user", target_val=clean_input(args.user), batch_size=args.limit)
     elif args.search:
-        target_label = f"search:{args.search}"
-        targets = bot.search_users(args.search, limit=args.limit)
+        run_continuous_session(bot, mode="search", target_val=args.search, batch_size=args.limit)
     elif args.repo:
         cleaned_repo = clean_input(args.repo)
         if "/" not in cleaned_repo:
             cleaned_repo = f"{cleaned_repo}/{cleaned_repo}"
-        target_label = cleaned_repo
-        targets = bot.get_contributors_of(cleaned_repo, limit=args.limit)
+        run_continuous_session(bot, mode="repo", target_val=cleaned_repo, batch_size=args.limit)
     elif args.list:
-        target_label = "custom-list"
-        targets = [clean_input(u) for u in args.list.split(",") if clean_input(u)]
+        run_continuous_session(bot, mode="list", target_val=args.list, batch_size=args.limit)
     else:
-        run_interactive(bot, default_limit=args.limit)
-        return
-
-    bot.process_targets(targets, target_limit=args.limit, target_label=target_label)
+        run_interactive(bot)
 
 
 if __name__ == "__main__":
