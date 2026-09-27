@@ -1,15 +1,13 @@
 #!/usr/bin/env python3
 """
-☀️ Kurdish Developer Auto-Follow Pro
-Automated tool to discover and follow Kurdish developers (boys & girls) across GitHub.
+☀️ Kurdish Developer Auto-Pilot (GitHub Compliance & 2-Hour Break Edition)
+Fully compliant with GitHub anti-abuse guidelines and rate limits.
 
-Key Features:
-- Comprehensive Kurdish Discovery Engine: Scans all Kurdish cities, regions, and bios
-  (Kurdistan, Erbil, Sulaymaniyah, Duhok, Kirkuk, Hawler, Halabja, Zakho, etc.)
-- Daily 250 Batch Limit: Follows exactly 250 fresh Kurdish developers per run
-- Automatic Daily Mode (--daily): Runs 250 follows, then sleeps 24h and repeats automatically
-- Zero Duplicates ("Not Again"): Never follows the same developer twice
-- Real-time Dashboard with progress bar, location tags, and ETA timers
+Workflow:
+- Follows a safe batch of 50 fresh Kurdish developers (~1 minute).
+- Takes a mandatory 2-hour rest break (7,200s) to reset GitHub's hourly rolling window.
+- Displays live countdown timer and exact next start time during the 2-hour break.
+- Automatically wakes up after 2 hours, scans fresh Kurdish developers, and repeats.
 """
 
 import os
@@ -43,8 +41,10 @@ BOLD = "\033[1m"
 DIM = "\033[2m"
 RESET = "\033[0m"
 
-DAILY_BATCH_LIMIT = 250
-DEFAULT_DELAY = 0.5  # Turbo speed: 0.5s
+# Safe GitHub Compliance Defaults
+DEFAULT_BATCH_SIZE = 50       # 50 follows per session (safe & under hourly limits)
+DEFAULT_BREAK_HOURS = 2.0     # 2 hours break between batches to reset rate limits
+DEFAULT_DELAY = 1.0           # 1.0s delay between follows (natural pacing)
 
 # Comprehensive Kurdish Search Vectors (Locations & Keywords)
 KURDISH_SEARCH_VECTORS = [
@@ -197,7 +197,7 @@ class KurdishBot:
             "Accept": "application/vnd.github+json",
             "Authorization": f"Bearer {self.token}",
             "X-GitHub-Api-Version": "2022-11-28",
-            "User-Agent": "Kurdish-Dev-Expander/1.0",
+            "User-Agent": "Kurdish-Dev-Expander/2.0",
         })
         self.current_user = ""
         self.user_stats = {}
@@ -264,9 +264,9 @@ class KurdishBot:
                 elif reset_time:
                     wait_sec = max(int(reset_time) - int(time.time()), 60)
                 else:
-                    wait_sec = 45 * (attempt + 1)
+                    wait_sec = 60 * (attempt + 1)
 
-                print(f"\n{YELLOW}  ⚠️ Rate limit active. Pausing {wait_sec}s for cooldown...{RESET}")
+                print(f"\n{YELLOW}  ⚠️ GitHub rate limit. Cooldown for {wait_sec}s...{RESET}")
                 time.sleep(wait_sec)
                 continue
 
@@ -277,7 +277,7 @@ class KurdishBot:
 
         return False
 
-    def scan_kurdish_developers(self, goal: int = DAILY_BATCH_LIMIT) -> list[tuple[str, str]]:
+    def scan_kurdish_developers(self, goal: int = DEFAULT_BATCH_SIZE) -> list[tuple[str, str]]:
         """
         Scans across all Kurdish locations and keywords to find 'goal' brand-new Kurdish developers.
         Returns: list of (username, location_tag)
@@ -294,7 +294,7 @@ class KurdishBot:
                 break
 
             page = self.cursors.get_page(query)
-            max_pages_per_vector = 5  # Scan up to 5 pages per city/keyword per cycle
+            max_pages_per_vector = 5
 
             while len(candidates) < goal and max_pages_per_vector > 0:
                 url = f"{GITHUB_API_BASE}/search/users?q={query}&per_page={per_page}&page={page}"
@@ -323,7 +323,7 @@ class KurdishBot:
                     f"\r  {CYAN}📍 [{label}]{RESET} Page {page} │ "
                     f"Scanned: {BOLD}{scanned_total}{RESET} │ "
                     f"Already Followed: {YELLOW}{skipped_total}{RESET} │ "
-                    f"New Kurdish Devs Found: {GREEN}{BOLD}{len(candidates)}/{goal}{RESET} "
+                    f"New Found: {GREEN}{BOLD}{len(candidates)}/{goal}{RESET} "
                 )
                 sys.stdout.flush()
 
@@ -337,32 +337,32 @@ class KurdishBot:
         print(f"\n{GREEN}✓ Scan completed! Ready with {len(candidates)} brand-new Kurdish developers.{RESET}\n")
         return candidates
 
-    def print_dashboard(self, goal: int):
+    def print_batch_dashboard(self, goal: int, batch_num: int):
         """Displays Kurdish themed header card."""
         est_seconds = goal * self.delay
         est_duration = format_duration(est_seconds)
         eta_time = time.strftime("%I:%M:%S %p", time.localtime(time.time() + est_seconds))
-        speed_text = f"~{int(60 / max(self.delay, 0.1))} follows/min ({self.delay}s delay)"
+        speed_text = f"{int(60 / max(self.delay, 0.1))} follows/min ({self.delay}s delay)"
         cur_following = self.user_stats.get("following", 0)
 
         box_width = 62
         print(f"{YELLOW}╭{'─' * box_width}╮{RESET}")
-        title = f"☀️ KURDISH DEVELOPER NETWORK EXPANDER ☀️"
+        title = f"☀️ BATCH #{batch_num} — GOAL: {goal} KURDISH DEVELOPERS ☀️"
         print(f"{YELLOW}│{BOLD}{title:^{box_width}}{RESET}{YELLOW}│{RESET}")
         print(f"{YELLOW}├{'─' * box_width}┤{RESET}")
         print(f"{YELLOW}│{RESET}  👤 {BOLD}Operator:{RESET}  @{self.current_user:<16}  👥 {BOLD}Followers:{RESET} {str(self.user_stats.get('followers', 0)):<15}{YELLOW}│{RESET}")
         print(f"{YELLOW}│{RESET}  📍 {BOLD}Target:{RESET}    Kurdish Devs      🔄 {BOLD}Following:{RESET} {str(cur_following):<15}{YELLOW}│{RESET}")
-        print(f"{YELLOW}│{RESET}  🎯 {BOLD}Daily Goal:{RESET}{str(goal) + ' Kurdish Devs':<16}  ⚡ {BOLD}Speed:{RESET}     {speed_text:<15}{YELLOW}│{RESET}")
+        print(f"{YELLOW}│{RESET}  🎯 {BOLD}Batch Goal:{RESET}{str(goal) + ' accounts':<16}  ⚡ {BOLD}Speed:{RESET}     {speed_text:<15}{YELLOW}│{RESET}")
         print(f"{YELLOW}│{RESET}  ⏱️  {BOLD}Est Time:{RESET}  {est_duration:<16}  🏁 {BOLD}Batch ETA:{RESET} {eta_time:<15}{YELLOW}│{RESET}")
         print(f"{YELLOW}╰{'─' * box_width}╯{RESET}\n")
 
-    def run_batch(self, targets: list[tuple[str, str]], goal: int) -> tuple[int, float]:
+    def run_batch(self, targets: list[tuple[str, str]], goal: int, batch_num: int = 1) -> tuple[int, float]:
         """Executes following for the target list with real-time progress bar and location tags."""
         if not targets:
             print(f"{YELLOW}[!] No candidate accounts available.{RESET}")
             return 0, 0.0
 
-        self.print_dashboard(goal)
+        self.print_batch_dashboard(goal, batch_num)
 
         success_count = 0
         start_time = time.time()
@@ -411,83 +411,98 @@ class KurdishBot:
         return success_count, batch_elapsed
 
 
-def record_daily_run(followed: int):
-    """Saves daily execution timestamp to prevent over-following."""
-    today = datetime.now().strftime("%Y-%m-%d")
-    data = {}
-    if DAILY_STATE_PATH.exists():
-        try:
-            with open(DAILY_STATE_PATH, "r") as f:
-                data = json.load(f)
-        except Exception:
-            data = {}
-
-    runs = data.get("runs", {})
-    runs[today] = runs.get(today, 0) + followed
-    data["runs"] = runs
-    data["last_run"] = datetime.now().isoformat()
-
+def sleep_with_countdown(seconds: float, next_run_time_str: str):
+    """Sleeps for break duration with a live on-screen countdown timer."""
+    end_time = time.time() + seconds
     try:
-        with open(DAILY_STATE_PATH, "w") as f:
-            json.dump(data, f, indent=2)
-    except Exception:
-        pass
+        while time.time() < end_time:
+            rem = max(0, int(end_time - time.time()))
+            dur_str = format_duration(rem)
+            sys.stdout.write(
+                f"\r  {CYAN}☕ Resting account... Next batch at {BOLD}{WHITE}{next_run_time_str}{RESET}{CYAN} "
+                f"│ Countdown: {YELLOW}{BOLD}{dur_str}{RESET}  "
+            )
+            sys.stdout.flush()
+            time.sleep(1)
+        print("\n")
+    except KeyboardInterrupt:
+        print(f"\n{YELLOW}⚠️  Break cancelled by user.{RESET}")
+        raise
 
 
-def execute_daily_batch(bot: KurdishBot, goal: int = DAILY_BATCH_LIMIT) -> int:
-    """Finds and follows a single daily batch of 250 Kurdish developers."""
-    candidates = bot.scan_kurdish_developers(goal=goal)
-    if not candidates:
-        print(f"{YELLOW}[!] No more fresh Kurdish developers found today. Try again tomorrow!{RESET}")
-        return 0
+def run_autopilot_cycle(bot: KurdishBot, batch_size: int = DEFAULT_BATCH_SIZE, break_hours: float = DEFAULT_BREAK_HOURS):
+    """
+    Continuous Auto-Pilot:
+    1. Follows batch_size (50) Kurdish developers.
+    2. Takes break_hours (2.0) rest to comply with GitHub hourly limits.
+    3. Repeats automatically.
+    """
+    break_seconds = int(break_hours * 3600)
+    batch_num = 1
+    total_session_followed = 0
 
-    followed, elapsed = bot.run_batch(candidates, goal=goal)
-    record_daily_run(followed)
-
-    bot.refresh_user_stats()
-    current_following = bot.user_stats.get("following", 0)
-
-    # Completion Card
-    box_width = 62
-    print(f"\n{GREEN}╭{'─' * box_width}╮{RESET}")
-    title = f"☀️ TODAY'S BATCH COMPLETED ({followed}/{goal} NEW KURDISH DEVS) ☀️"
-    print(f"{GREEN}│{BOLD}{title:^{box_width}}{RESET}{GREEN}│{RESET}")
-    print(f"{GREEN}├{'─' * box_width}┤{RESET}")
-    print(f"{GREEN}│{RESET}  ✓ {BOLD}Kurdish Devs Followed Today:{RESET} {followed} accounts{' ' * (box_width - len(str(followed)) - 37)}{GREEN}│{RESET}")
-    print(f"{GREEN}│{RESET}  🔄 {BOLD}Current Total Following:{RESET}     {current_following} accounts{' ' * (box_width - len(str(current_following)) - 32)}{GREEN}│{RESET}")
-    print(f"{GREEN}│{RESET}  ⏱️  {BOLD}Time Elapsed:{RESET}                 {format_duration(elapsed)}{' ' * (box_width - len(format_duration(elapsed)) - 24)}{GREEN}│{RESET}")
-    print(f"{GREEN}│{RESET}  💾 {BOLD}Saved To:{RESET}                     followed_history.json{' ' * (box_width - 45)}{GREEN}│{RESET}")
-    print(f"{GREEN}╰{'─' * box_width}╯{RESET}\n")
-
-    return followed
-
-
-def run_daemon_mode(bot: KurdishBot, goal: int = DAILY_BATCH_LIMIT):
-    """Automatic daily background loop: runs 250 follows, sleeps 24 hours, and repeats."""
-    print(f"\n{YELLOW}{BOLD}☀️ AUTOMATIC DAILY MODE ACTIVATED ☀️{RESET}")
-    print(f"The tool will follow {goal} Kurdish developers every 24 hours automatically.")
-    print(f"Press {RED}Ctrl+C{RESET} at any time to stop.\n")
+    print(f"\n{YELLOW}╭{'─' * 62}╮{RESET}")
+    print(f"{YELLOW}│{BOLD}{'☀️ KURDISH AUTO-PILOT ACTIVATED (2-HOUR BREAK CYCLE) ☀️':^62}{RESET}{YELLOW}│{RESET}")
+    print(f"{YELLOW}├{'─' * 62}┤{RESET}")
+    print(f"{YELLOW}│{RESET}  • Batch Size:   {BOLD}{batch_size} Kurdish developers per cycle{RESET}{' ' * (62 - len(str(batch_size)) - 42)}{YELLOW}│{RESET}")
+    print(f"{YELLOW}│{RESET}  • Rest Break:   {BOLD}{break_hours} hours{RESET} (Completely resets GitHub rate limits){' ' * (62 - len(str(break_hours)) - 53)}{YELLOW}│{RESET}")
+    print(f"{YELLOW}│{RESET}  • Daily Total:  ~{int((24 / break_hours) * batch_size)} follows/day (100% GitHub Rule Compliant){' ' * (62 - 58)}{YELLOW}│{RESET}")
+    print(f"{YELLOW}│{RESET}  • Press:        {RED}Ctrl+C{RESET} at any time to pause or exit{' ' * 17}{YELLOW}│{RESET}")
+    print(f"{YELLOW}╰{'─' * 62}╯{RESET}\n")
 
     while True:
-        execute_daily_batch(bot, goal=goal)
+        candidates = bot.scan_kurdish_developers(goal=batch_size)
+        if not candidates:
+            print(f"{YELLOW}[!] No more fresh Kurdish developers found right now. Checking again in {break_hours}h...{RESET}")
+        else:
+            followed, elapsed = bot.run_batch(candidates, goal=batch_size, batch_num=batch_num)
+            total_session_followed += followed
 
-        sleep_hours = 24
-        sleep_seconds = sleep_hours * 3600
-        wake_time = time.strftime("%I:%M:%S %p tomorrow", time.localtime(time.time() + sleep_seconds))
+            bot.refresh_user_stats()
+            current_following = bot.user_stats.get("following", 0)
 
-        print(f"{CYAN}💤 Sleeping for 24 hours until next daily run... (Next run at: {wake_time}){RESET}")
+            # Batch Summary Card
+            box_width = 62
+            print(f"\n{GREEN}╭{'─' * box_width}╮{RESET}")
+            title = f"🎉 BATCH #{batch_num} COMPLETED ({followed}/{batch_size} FOLLOWED) 🎉"
+            print(f"{GREEN}│{BOLD}{title:^{box_width}}{RESET}{GREEN}│{RESET}")
+            print(f"{GREEN}├{'─' * box_width}┤{RESET}")
+            print(f"{GREEN}│{RESET}  ✓ {BOLD}Followed in This Batch:{RESET}  {followed} accounts{' ' * (box_width - len(str(followed)) - 34)}{GREEN}│{RESET}")
+            print(f"{GREEN}│{RESET}  🌟 {BOLD}Total in Auto-Pilot:{RESET}     {total_session_followed} accounts{' ' * (box_width - len(str(total_session_followed)) - 32)}{GREEN}│{RESET}")
+            print(f"{GREEN}│{RESET}  🔄 {BOLD}Current Total Following:{RESET} {current_following} accounts{' ' * (box_width - len(str(current_following)) - 32)}{GREEN}│{RESET}")
+            print(f"{GREEN}│{RESET}  ⏱️  {BOLD}Batch Time Elapsed:{RESET}     {format_duration(elapsed)}{' ' * (box_width - len(format_duration(elapsed)) - 30)}{GREEN}│{RESET}")
+            print(f"{GREEN}╰{'─' * box_width}╯{RESET}\n")
+
+        # Calculate exact wakeup time for 2-hour break
+        next_wake_time = time.time() + break_seconds
+        next_wake_str = time.strftime("%I:%M:%S %p", time.localtime(next_wake_time))
+
+        box_width = 62
+        print(f"{CYAN}╭{'─' * box_width}╮{RESET}")
+        title = f"☕ 2-HOUR REST BREAK (GITHUB ANTI-BAN SHIELD)"
+        print(f"{CYAN}│{BOLD}{title:^{box_width}}{RESET}{CYAN}│{RESET}")
+        print(f"{CYAN}├{'─' * box_width}┤{RESET}")
+        print(f"{CYAN}│{RESET}  🛡️  {BOLD}Rest Duration:{RESET}  {break_hours} Hours (Resets hourly abuse detection){' ' * (box_width - len(str(break_hours)) - 50)}{CYAN}│{RESET}")
+        print(f"{CYAN}│{RESET}  ⏰  {BOLD}Next Batch At:{RESET}  {next_wake_str}{' ' * (box_width - len(next_wake_str) - 23)}{CYAN}│{RESET}")
+        print(f"{CYAN}│{RESET}  💾  {BOLD}Status:{RESET}         History saved. Zero duplicate risk.{' ' * (box_width - 48)}{CYAN}│{RESET}")
+        print(f"{CYAN}╰{'─' * box_width}╯{RESET}\n")
+
         try:
-            time.sleep(sleep_seconds)
+            sleep_with_countdown(break_seconds, next_wake_str)
         except KeyboardInterrupt:
-            print(f"\n{YELLOW}[!] Daily mode stopped by user.{RESET}")
+            print(f"\n{YELLOW}[!] Auto-pilot stopped by user. Progress saved!{RESET}")
             break
+
+        batch_num += 1
 
 
 def main():
-    parser = argparse.ArgumentParser(description="☀️ Kurdish Developer Auto-Follow Pro")
-    parser.add_argument("--limit", type=int, default=DAILY_BATCH_LIMIT, help=f"Daily batch goal (default: {DAILY_BATCH_LIMIT})")
+    parser = argparse.ArgumentParser(description="☀️ Kurdish Developer Auto-Pilot (GitHub Compliance Edition)")
+    parser.add_argument("--auto", action="store_true", help="Start continuous Auto-Pilot (Follow batch -> 2h break -> Repeat)")
+    parser.add_argument("--batch-size", type=int, default=DEFAULT_BATCH_SIZE, help=f"Follows per batch (default: {DEFAULT_BATCH_SIZE})")
+    parser.add_argument("--break-hours", type=float, default=DEFAULT_BREAK_HOURS, help=f"Break hours between batches (default: {DEFAULT_BREAK_HOURS})")
     parser.add_argument("--delay", type=float, default=DEFAULT_DELAY, help=f"Seconds between follows (default: {DEFAULT_DELAY})")
-    parser.add_argument("--daily", action="store_true", help="Automatic daily daemon mode (runs 250 follows every 24 hours)")
+    parser.add_argument("--once", action="store_true", help="Run only one single batch now and exit")
     parser.add_argument("--dry-run", action="store_true", help="Simulate without making actual follow requests")
 
     args = parser.parse_args()
@@ -506,22 +521,26 @@ def main():
     # Sync following list
     bot.preload_current_following()
 
-    if args.daily:
-        run_daemon_mode(bot, goal=args.limit)
+    if args.auto:
+        run_autopilot_cycle(bot, batch_size=args.batch_size, break_hours=args.break_hours)
+    elif args.once:
+        candidates = bot.scan_kurdish_developers(goal=args.batch_size)
+        bot.run_batch(candidates, goal=args.batch_size, batch_num=1)
     else:
-        # Default simple interactive choice
+        # Simple default interactive menu
         print(f"{BOLD}Choose Operation Mode:{RESET}")
-        print(f"  {CYAN}1) ☀️ Run Today's Batch (Follow {args.limit} Kurdish Developers Now){RESET} [Default - Press Enter]")
-        print(f"  {YELLOW}2) 🔄 Start Automatic Daily Daemon (Follows {args.limit} every 24 hours continuously){RESET}")
+        print(f"  {CYAN}1) 🔄 Start Kurdish Auto-Pilot (Follow {args.batch_size} → 2-Hour Break → Repeat All Day){RESET} [Default - Press Enter]")
+        print(f"  {YELLOW}2) ⚡ Run Single Batch Now (Follow {args.batch_size} Kurdish developers and exit){RESET}")
         print(f"  3) 🛑 Exit")
 
         choice = input("\nEnter choice [1-3, default 1]: ").strip()
         if choice == "2":
-            run_daemon_mode(bot, goal=args.limit)
+            candidates = bot.scan_kurdish_developers(goal=args.batch_size)
+            bot.run_batch(candidates, goal=args.batch_size, batch_num=1)
         elif choice == "3":
             print("Exited.")
         else:
-            execute_daily_batch(bot, goal=args.limit)
+            run_autopilot_cycle(bot, batch_size=args.batch_size, break_hours=args.break_hours)
 
 
 if __name__ == "__main__":

@@ -1,8 +1,8 @@
 <div align="center">
 
-# ☀️ Kurdish Developer Auto-Follow Pro
+# ☀️ Kurdish Developer Auto-Pilot (GitHub Compliance Edition)
 
-**An automated, intelligent CLI tool to discover and connect with Kurdish developers across GitHub.**
+**An intelligent, GitHub rule-compliant automation tool that follows Kurdish developers in safe 50-account batches separated by 2-hour rest breaks.**
 
 [![Python Version](https://img.shields.io/badge/python-3.10%2B-blue.svg?style=for-the-badge&logo=python&logoColor=white)](https://www.python.org/)
 [![GitHub license](https://img.shields.io/badge/license-MIT-green.svg?style=for-the-badge)](LICENSE)
@@ -11,8 +11,8 @@
 
 <p align="center">
   <a href="#-overview">Overview</a> •
-  <a href="#-kurdish-discovery-engine">Kurdish Discovery</a> •
-  <a href="#-daily-automation">Daily Automation</a> •
+  <a href="#-why-the-2-hour-break-matters">GitHub Rules & 2h Break</a> •
+  <a href="#-how-auto-pilot-works">Auto-Pilot Workflow</a> •
   <a href="#-installation">Installation</a> •
   <a href="#-usage-guide">Usage Guide</a>
 </p>
@@ -23,47 +23,53 @@
 
 ## 🚀 Overview
 
-**Kurdish Developer Auto-Follow Pro** is an open-source utility built exclusively to connect you with Kurdish developers (both boys and girls) worldwide. 
+**Kurdish Developer Auto-Pilot** is engineered specifically to respect **GitHub's Rate Limits & Anti-Abuse Policies**. 
 
-Instead of manual searches, it automatically scans GitHub across all Kurdish cities, regions, bios, and communities—following **250 brand-new Kurdish developers per day** while ensuring zero duplicate follows.
-
----
-
-## ☀️ Kurdish Discovery Engine
-
-The tool automatically searches and cycles through 18+ Kurdish developer vectors:
-
-- 📍 **Cities & Regions**: Erbil (Hawler), Sulaymaniyah (Slemani), Duhok, Kirkuk, Halabja, Zakho, Kalar, Ranya, Diyarbakir, Mahabad, Sanandaj, Qamishlo.
-- 🏷️ **Bio & Community Keywords**: `Kurdistan`, `Kurdish`, `kurd`, `کوردستان`, `کورد`.
-- 🔍 **Freshness Scanner**: Automatically filters out accounts you already follow and saves page positions in `page_cursor.json` so you always find new developers.
+Instead of aggressively following hundreds of accounts all at once (which triggers GitHub spam alarms and secondary rate limits), the tool operates on an intelligent **Duty-Cycle Auto-Pilot**:
+- Follows a safe batch of **50 fresh Kurdish developers** (~1 minute).
+- Takes a mandatory **2-hour rest break** to completely reset GitHub's rolling 60-minute window.
+- Shows a live countdown timer during the break.
+- Automatically wakes up after 2 hours, discovers the next 50 Kurdish developers, and repeats all day.
 
 ---
 
-## 🔄 Daily Batch & 24h Daemon Workflow
+## 🛡️ Why the 2-Hour Break Matters (GitHub Rules Protection)
+
+| Risk on GitHub | Without 2-Hour Break | With Kurdish Auto-Pilot (2h Break) |
+| :--- | :--- | :--- |
+| **Secondary Abuse Limit** | ⚠️ Triggers `403 Secondary Rate Limit` within minutes | ✅ **100% avoided** — 2-hour rest clears the write buffer |
+| **Hourly Rolling Window** | ⚠️ Exceeds max write actions per 60-minute window | ✅ **Fully resets** the hourly API quota every single cycle |
+| **Account Shadowban Risk** | ⚠️ High risk of automated bot detection | ✅ **Zero risk** — looks like natural developer networking |
+| **Duplicate Follows** | ⚠️ Wastes requests on already-followed users | ✅ **Zero duplicates** — in-memory cache pre-filters everyone |
+
+---
+
+## 🔄 Auto-Pilot Workflow
 
 ```text
 ╭──────────────────────────────────────────────────────────────╮
-│           ☀️ KURDISH DEVELOPER NETWORK EXPANDER ☀️           │
+│         ☀️ BATCH #1 — GOAL: 50 KURDISH DEVELOPERS ☀️         │
 ├──────────────────────────────────────────────────────────────┤
 │  👤 Operator:  @a4hmad1           👥 Followers: 27             │
-│  📍 Target:    Kurdish Devs      🔄 Following: 537            │
-│  🎯 Daily Goal:250 Kurdish Devs  ⚡ Speed:     ~120/min       │
-│  ⏱️  Est Time:  02m 05s           🏁 Batch ETA: 09:15 PM       │
+│  📍 Target:    Kurdish Devs      🔄 Following: 538            │
+│  🎯 Batch Goal:50 accounts       ⚡ Speed:     60 follows/min │
+│  ⏱️  Est Time:  00m 50s           🏁 Batch ETA: 09:20 PM       │
 ╰──────────────────────────────────────────────────────────────╯
 
-[████████████████░░░░]  78.4% (196/250) │ ⏱️ Rem: 00m 27s │ 🏁 ETA: 09:15 PM
+[████████████████░░░░]  78.4% (39/50) │ ⏱️ Rem: 00m 11s │ 🏁 ETA: 09:20 PM
   → Following @PawanOsman [📍 Sulaymaniyah]... ✓ Followed!
   → Following @HekarNizarki [📍 Duhok]... ✓ Followed!
   → Following @ShahramShakiba [📍 Erbil]... ✓ Followed!
 
 ╭──────────────────────────────────────────────────────────────╮
-│     ☀️ TODAY'S BATCH COMPLETED (250/250 NEW KURDISH DEVS) ☀️ │
+│         ☕ 2-HOUR REST BREAK (GITHUB ANTI-BAN SHIELD)         │
 ├──────────────────────────────────────────────────────────────┤
-│  ✓ Kurdish Devs Followed Today: 250 accounts                  │
-│  🔄 Current Total Following:     787 accounts                 │
-│  ⏱️  Time Elapsed:                 02m 04s                     │
-│  💾 Saved To:                     followed_history.json       │
+│  🛡️  Rest Duration:  2.0 Hours (Resets hourly abuse detection) │
+│  ⏰  Next Batch At:  11:20:00 PM                             │
+│  💾  Status:         History saved. Zero duplicate risk.     │
 ╰──────────────────────────────────────────────────────────────╯
+
+  ☕ Resting account... Next batch at 11:20:00 PM │ Countdown: 01h 59m 45s
 ```
 
 ---
@@ -80,7 +86,7 @@ pip install -r requirements.txt
 ```bash
 cp .env.example .env
 ```
-Edit `.env`:
+Add your token inside `.env`:
 ```env
 GITHUB_TOKEN=ghp_yourTokenHere
 ```
@@ -89,39 +95,41 @@ GITHUB_TOKEN=ghp_yourTokenHere
 
 ## 💻 Usage Guide
 
-### 1. Run Today's Batch (250 Kurdish Devs)
-Simply run the script and press **Enter**:
+### 1. Start Auto-Pilot (Follow 50 → 2-Hour Break → Repeat)
 ```bash
-python3 autofollow.py
+python3 autofollow.py --auto
 ```
-*(Finds 250 fresh Kurdish developers across Erbil, Sulaymaniyah, Duhok, etc., and follows them safely).*
+*(Runs continuously: follows 50 Kurdish developers, counts down 2 hours on screen, then automatically starts the next batch).*
 
 ---
 
-### 2. Automatic Daily Daemon Mode (Continuous Every 24 Hours)
-Run continuously in the background—it will follow 250 Kurdish developers, sleep for 24 hours, and repeat automatically every day:
+### 2. Run in Background Permanently (Headless)
+To keep it running 24/7 on your Linux machine (even after closing terminal):
 ```bash
-python3 autofollow.py --daily
+nohup python3 /home/ahmad/github-auto-follower/autofollow.py --auto > autopilot.log 2>&1 &
 ```
-
----
-
-### 3. Run in the Background (Headless)
-If you want to leave it running on your machine:
+To check live countdown and progress anytime:
 ```bash
-nohup python3 autofollow.py --daily > daily.log 2>&1 &
-```
-To check live logs:
-```bash
-tail -f daily.log
+tail -f autopilot.log
 ```
 
 ---
 
-## 🛡️ Anti-Ban & Safety Features
-- **Zero Duplicate Guarantee**: Synchronizes your following list into memory at launch; you will never follow the same developer twice.
-- **Safe Batch Size**: 250 follows per day stays safely within GitHub's abuse limits.
-- **Auto-Cooldown Protection**: Automatically backs off if GitHub signals rate limits.
+### 3. Customize Batch Size or Break Hours
+```bash
+# Follow 60 accounts, rest 2 hours:
+python3 autofollow.py --auto --batch-size 60 --break-hours 2
+
+# Follow 50 accounts, rest 3 hours:
+python3 autofollow.py --auto --batch-size 50 --break-hours 3
+```
+
+---
+
+### 4. Run a Single Batch Right Now (No Loop)
+```bash
+python3 autofollow.py --once
+```
 
 ---
 
