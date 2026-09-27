@@ -1,0 +1,51 @@
+name: ☀️ Kurdish Developer Auto-Pilot (Cloud 24/7)
+
+on:
+  schedule:
+    # Runs every 30 minutes in the GitHub cloud (even when your computer is shut down!)
+    - cron: '*/30 * * * *'
+  workflow_dispatch:
+    inputs:
+      batch_size:
+        description: 'Number of developers to follow'
+        required: false
+        default: '250'
+      gender:
+        description: 'Gender filter (all, female, male)'
+        required: false
+        default: 'all'
+
+permissions:
+  contents: write
+
+jobs:
+  autopilot:
+    runs-on: ubuntu-latest
+    steps:
+      - name: 📥 Check out repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: 🐍 Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: 📦 Install dependencies
+        run: |
+          pip install -r requirements.txt
+
+      - name: ☀️ Run Kurdish Auto-Pilot Batch
+        env:
+          GITHUB_TOKEN: ${{ secrets.GH_PAT || secrets.GITHUB_TOKEN }}
+        run: |
+          python3 autofollow.py --once --batch-size ${{ github.event.inputs.batch_size || 250 }} --gender ${{ github.event.inputs.gender || 'all' }}
+
+      - name: 💾 Commit & Push Updated History
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+          git add -f followed_history.json page_cursor.json follows.log 2>/dev/null || true
+          git diff --staged --quiet || (git commit -m "chore(autopilot): sync follow history [skip ci]" && git push)

@@ -43,8 +43,8 @@ BOLD = "\033[1m"
 DIM = "\033[2m"
 RESET = "\033[0m"
 
-DEFAULT_BATCH_SIZE = 50       # 50 follows per session (safe under hourly limits)
-DEFAULT_BREAK_HOURS = 2.0     # 2 hours break between batches
+DEFAULT_BATCH_SIZE = 250      # 250 follows per batch
+DEFAULT_BREAK_HOURS = 0.5     # 0.5 hours (30 minutes) break between batches
 DEFAULT_DELAY = 1.0           # 1.0s delay between follows
 
 # ==========================================
@@ -713,20 +713,24 @@ def run_autopilot_cycle(bot: KurdishBot, batch_size: int = DEFAULT_BATCH_SIZE, b
         "BOYS ONLY" if bot.gender_filter in ("male", "boy", "boys") else "ALL (BOYS & GIRLS)"
     )
 
-    print(f"\n{YELLOW}╭{'─' * 62}╮{RESET}")
-    print(f"{YELLOW}│{BOLD}{'☀️ KURDISH AUTO-PILOT ACTIVATED (2-HOUR BREAK CYCLE) ☀️':^62}{RESET}{YELLOW}│{RESET}")
-    print(f"{YELLOW}├{'─' * 62}┤{RESET}")
-    print(f"{YELLOW}│{RESET}  • Target:       Verified Kurdish Developers [{gender_label}]{' ' * (62 - len(gender_label) - 46)}{YELLOW}│{RESET}")
-    print(f"{YELLOW}│{RESET}  • Tech Roles:   Fullstack, Backend, Software Engineers, Laravel{' ' * 14}{YELLOW}│{RESET}")
-    print(f"{YELLOW}│{RESET}  • Batch Size:   {batch_size} developers per cycle{' ' * (62 - len(str(batch_size)) - 34)}{YELLOW}│{RESET}")
-    print(f"{YELLOW}│{RESET}  • Rest Break:   {break_hours} hours (Completely resets GitHub rate limits){' ' * (62 - len(str(break_hours)) - 53)}{YELLOW}│{RESET}")
-    print(f"{YELLOW}│{RESET}  • Stop:         Press {RED}Ctrl+C{RESET} at any time to pause or exit{' ' * 19}{YELLOW}│{RESET}")
-    print(f"{YELLOW}╰{'─' * 62}╯{RESET}\n")
+    break_text = f"{int(break_hours * 60)} Minutes" if break_hours < 1 else f"{break_hours:g} Hours"
+
+    box_width = 64
+    print(f"\n{YELLOW}╭{'─' * box_width}╮{RESET}")
+    title = f"☀️ KURDISH AUTO-PILOT ACTIVATED ({break_text.upper()} BREAK) ☀️"
+    print(f"{YELLOW}│{BOLD}{title:^{box_width}}{RESET}{YELLOW}│{RESET}")
+    print(f"{YELLOW}├{'─' * box_width}┤{RESET}")
+    print(f"{YELLOW}│{RESET}  • Target:       Verified Kurdish Developers [{gender_label}]{' ' * max(0, box_width - len(gender_label) - 48)}{YELLOW}│{RESET}")
+    print(f"{YELLOW}│{RESET}  • Tech Roles:   Fullstack, Backend, Software Engineers, Laravel{' ' * (box_width - 50)}{YELLOW}│{RESET}")
+    print(f"{YELLOW}│{RESET}  • Batch Size:   {batch_size} developers per cycle{' ' * max(0, box_width - len(str(batch_size)) - 36)}{YELLOW}│{RESET}")
+    print(f"{YELLOW}│{RESET}  • Rest Break:   {break_text} (Resets GitHub rate limits){' ' * max(0, box_width - len(break_text) - 43)}{YELLOW}│{RESET}")
+    print(f"{YELLOW}│{RESET}  • Stop:         Press {RED}Ctrl+C{RESET} at any time to pause or exit{' ' * (box_width - 45)}{YELLOW}│{RESET}")
+    print(f"{YELLOW}╰{'─' * box_width}╯{RESET}\n")
 
     while True:
         candidates = bot.scan_kurdish_developers(goal=batch_size)
         if not candidates:
-            print(f"{YELLOW}[!] No more fresh Kurdish developers found right now. Checking again in {break_hours}h...{RESET}")
+            print(f"{YELLOW}[!] No more fresh Kurdish developers found right now. Checking again in {break_text}...{RESET}")
         else:
             followed, elapsed = bot.run_batch(candidates, goal=batch_size, batch_num=batch_num)
             total_session_followed += followed
@@ -735,29 +739,29 @@ def run_autopilot_cycle(bot: KurdishBot, batch_size: int = DEFAULT_BATCH_SIZE, b
             current_following = bot.user_stats.get("following", 0)
 
             # Batch Summary Card
-            box_width = 62
+            box_width = 64
             print(f"\n{GREEN}╭{'─' * box_width}╮{RESET}")
             title = f"🎉 BATCH #{batch_num} COMPLETED ({followed}/{batch_size} FOLLOWED) 🎉"
             print(f"{GREEN}│{BOLD}{title:^{box_width}}{RESET}{GREEN}│{RESET}")
             print(f"{GREEN}├{'─' * box_width}┤{RESET}")
-            print(f"{GREEN}│{RESET}  ✓ {BOLD}Followed in This Batch:{RESET}  {followed} developers{' ' * (box_width - len(str(followed)) - 35)}{GREEN}│{RESET}")
-            print(f"{GREEN}│{RESET}  🌟 {BOLD}Total in Auto-Pilot:{RESET}     {total_session_followed} developers{' ' * (box_width - len(str(total_session_followed)) - 33)}{GREEN}│{RESET}")
-            print(f"{GREEN}│{RESET}  🔄 {BOLD}Current Total Following:{RESET} {current_following} accounts{' ' * (box_width - len(str(current_following)) - 32)}{GREEN}│{RESET}")
-            print(f"{GREEN}│{RESET}  ⏱️  {BOLD}Batch Time Elapsed:{RESET}     {format_duration(elapsed)}{' ' * (box_width - len(format_duration(elapsed)) - 30)}{GREEN}│{RESET}")
+            print(f"{GREEN}│{RESET}  ✓ {BOLD}Followed in This Batch:{RESET}  {followed} developers{' ' * max(0, box_width - len(str(followed)) - 37)}{GREEN}│{RESET}")
+            print(f"{GREEN}│{RESET}  🌟 {BOLD}Total in Auto-Pilot:{RESET}     {total_session_followed} developers{' ' * max(0, box_width - len(str(total_session_followed)) - 35)}{GREEN}│{RESET}")
+            print(f"{GREEN}│{RESET}  🔄 {BOLD}Current Total Following:{RESET} {current_following} accounts{' ' * max(0, box_width - len(str(current_following)) - 34)}{GREEN}│{RESET}")
+            print(f"{GREEN}│{RESET}  ⏱️  {BOLD}Batch Time Elapsed:{RESET}     {format_duration(elapsed)}{' ' * max(0, box_width - len(format_duration(elapsed)) - 32)}{GREEN}│{RESET}")
             print(f"{GREEN}╰{'─' * box_width}╯{RESET}\n")
 
-        # Calculate exact wakeup time for 2-hour break
+        # Calculate exact wakeup time for break
         next_wake_time = time.time() + break_seconds
         next_wake_str = time.strftime("%I:%M:%S %p", time.localtime(next_wake_time))
 
-        box_width = 62
+        box_width = 64
         print(f"{CYAN}╭{'─' * box_width}╮{RESET}")
-        title = f"☕ 2-HOUR REST BREAK (GITHUB ANTI-BAN SHIELD)"
+        title = f"☕ {break_text.upper()} REST BREAK (GITHUB ANTI-BAN SHIELD)"
         print(f"{CYAN}│{BOLD}{title:^{box_width}}{RESET}{CYAN}│{RESET}")
         print(f"{CYAN}├{'─' * box_width}┤{RESET}")
-        print(f"{CYAN}│{RESET}  🛡️  {BOLD}Rest Duration:{RESET}  {break_hours} Hours (Resets hourly abuse detection){' ' * (box_width - len(str(break_hours)) - 50)}{CYAN}│{RESET}")
-        print(f"{CYAN}│{RESET}  ⏰  {BOLD}Next Batch At:{RESET}  {next_wake_str}{' ' * (box_width - len(next_wake_str) - 23)}{CYAN}│{RESET}")
-        print(f"{CYAN}│{RESET}  💾  {BOLD}Status:{RESET}         History saved. Zero duplicate risk.{' ' * (box_width - 48)}{CYAN}│{RESET}")
+        print(f"{CYAN}│{RESET}  🛡️  {BOLD}Rest Duration:{RESET}  {break_text} (Resets hourly abuse detection){' ' * max(0, box_width - len(break_text) - 49)}{CYAN}│{RESET}")
+        print(f"{CYAN}│{RESET}  ⏰  {BOLD}Next Batch At:{RESET}  {next_wake_str}{' ' * max(0, box_width - len(next_wake_str) - 25)}{CYAN}│{RESET}")
+        print(f"{CYAN}│{RESET}  💾  {BOLD}Status:{RESET}         History saved. Zero duplicate risk.{' ' * max(0, box_width - 50)}{CYAN}│{RESET}")
         print(f"{CYAN}╰{'─' * box_width}╯{RESET}\n")
 
         try:
@@ -853,7 +857,7 @@ def ask_gender() -> str:
 
 def main():
     parser = argparse.ArgumentParser(description="☀️ Kurdish Developer Auto-Pilot Pro")
-    parser.add_argument("--auto", action="store_true", help="Start continuous Auto-Pilot (Follow batch -> 2h break -> Repeat)")
+    parser.add_argument("--auto", action="store_true", help="Start continuous Auto-Pilot (Follow batch -> 30m break -> Repeat)")
     parser.add_argument("--gender", default="all", choices=["all", "female", "girl", "girls", "male", "boy", "boys"], help="Filter by gender (girl/boy/all)")
     parser.add_argument("--batch-size", type=int, default=DEFAULT_BATCH_SIZE, help=f"Follows per batch (default: {DEFAULT_BATCH_SIZE})")
     parser.add_argument("--break-hours", type=float, default=DEFAULT_BREAK_HOURS, help=f"Break hours between batches (default: {DEFAULT_BREAK_HOURS})")
@@ -890,8 +894,9 @@ def main():
     else:
         while True:
             # Interactive Daily Start
+            break_menu_text = f"{int(args.break_hours * 60)}-Minute" if args.break_hours < 1 else f"{args.break_hours:g}-Hour"
             print(f"{BOLD}Choose Operation Mode:{RESET}")
-            print(f"  {CYAN}1) 🔄 Start Kurdish Auto-Pilot (Follow {args.batch_size} → 2-Hour Break → Repeat){RESET} [Default - Press Enter]")
+            print(f"  {CYAN}1) 🔄 Start Kurdish Auto-Pilot (Follow {args.batch_size} → {break_menu_text} Break → Repeat){RESET} [Default - Press Enter]")
             print(f"  {YELLOW}2) ⚡ Run Single Batch of {args.batch_size} Now & Exit{RESET}")
             print(f"  {MAGENTA}3) 📜 View Follow Log & History (Show users you have followed){RESET}")
             print(f"  4) 🛑 Exit")

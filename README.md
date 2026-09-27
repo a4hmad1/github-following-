@@ -29,9 +29,10 @@
 Instead of aggressively following accounts all at once (which triggers GitHub spam alarms and secondary rate limits), the tool operates on an intelligent **Duty-Cycle Auto-Pilot**:
 - **Verified Tech Roles**: Inspects candidate profiles to verify they are **Fullstack, Backend, Software Engineers, Laravel, or Senior Developers**.
 - **Gender Selection**: Choose **Girls Only**, **Boys Only**, or **All Developers** (scans pronouns, bio signals, Kurdish first names, and usernames).
-- **Safe Batch Size**: Follows a safe batch of **50 verified Kurdish developers** per session (~1 minute).
-- **2-Hour Anti-Ban Break**: Automatically takes a **2-hour rest break** with a live countdown timer to completely clear GitHub's hourly rolling window.
-- **Continuous 24/7 Cycle**: Automatically wakes up after the 2-hour break, discovers the next batch, and repeats safely.
+- **Safe Batch Size**: Follows **250 verified Kurdish developers** per cycle (~4 minutes).
+- **30-Minute Anti-Ban Break**: Automatically takes a **30-minute rest break** with a live countdown timer to completely clear GitHub's rolling window.
+- **Continuous 24/7 Cycle**: Automatically wakes up after 30 minutes, discovers the next batch of 250, and repeats safely.
+- **Run in Cloud (Computer Off)**: Includes a **GitHub Actions 24/7 workflow** that runs in GitHub's cloud even when your personal computer is shut down!
 - **Zero Duplicate Risk ("Not Again")**: Pre-caches your existing following list and maintains a local database to guarantee no account is ever followed twice.
 
 ---
@@ -104,7 +105,7 @@ Simply run:
 python3 autofollow.py
 ```
 You will be prompted to:
-1. Choose mode: **Auto-Pilot** (50 follows → 2h break → repeat) or **Single Batch**.
+1. Choose mode: **Auto-Pilot** (250 follows → 30m break → repeat) or **Single Batch**.
 2. Select gender filter:
    - `1) 🌟 All Kurdish Developers (Boys & Girls)`
    - `2) 👩 Kurdish Girls Only` (Female Fullstack / Backend / Software Engineers)
@@ -116,37 +117,39 @@ You will be prompted to:
 You can also run directly with command-line flags:
 
 ```bash
-# Follow Kurdish Girls Only (2-hour break cycle):
+# Follow 250 Kurdish Girls (30-minute break cycle):
 python3 autofollow.py --auto --gender female
 
-# Follow Kurdish Boys Only (2-hour break cycle):
+# Follow 250 Kurdish Boys (30-minute break cycle):
 python3 autofollow.py --auto --gender male
 
-# Follow All Kurdish Developers (default):
+# Follow 250 All Kurdish Developers (30-minute break cycle):
 python3 autofollow.py --auto --gender all
 ```
 
 ---
 
-### 3. Run in Background Permanently (24/7 Headless)
-To keep Auto-Pilot running continuously on your Linux machine (even after closing the terminal):
+### 3. Run With Computer Shut Down (GitHub Actions Cloud 24/7)
+If you close your terminal and **turn off/shut down your computer**, local software cannot run. 
+To keep the tool following Kurdish developers **24/7 in the cloud without your computer**:
+
+1. Go to your GitHub repository: [**`a4hmad1/github-following-`**](https://github.com/a4hmad1/github-following-)
+2. Click **Settings** ➔ **Secrets and variables** ➔ **Actions**
+3. Click **New repository secret**:
+   - Name: `GH_PAT`
+   - Value: Paste your GitHub Personal Access Token (`ghp_...`)
+4. The workflow in [`.github/workflows/autopilot.yml`](file:///home/ahmad/github-auto-follower/.github/workflows/autopilot.yml) will automatically run every **30 minutes** in GitHub's cloud, follow 250 Kurdish developers, and save your follow history back to the repo!
+
+---
+
+### 4. Run in Background on Local Machine (Headless)
+If your computer stays on and you just want to close the terminal:
 ```bash
 nohup python3 /home/ahmad/github-auto-follower/autofollow.py --auto > autopilot.log 2>&1 &
 ```
 To check live countdown and progress anytime:
 ```bash
 tail -f autopilot.log
-```
-
----
-
-### 4. Custom Batch Size or Break Duration
-```bash
-# Follow 50 accounts, rest 2.5 hours:
-python3 autofollow.py --auto --batch-size 50 --break-hours 2.5
-
-# Run a single batch of 50 accounts right now and exit:
-python3 autofollow.py --once
 ```
 
 ---
