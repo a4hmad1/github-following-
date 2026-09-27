@@ -1,7 +1,12 @@
 #!/usr/bin/env python3
 """
 GitHub Auto-Follow Tool (High Performance Edition)
-Optimized with in-memory preloading, connection pooling, and sub-second delay modes.
+Features:
+- Beautiful UI dashboard with live progress bar and ETA clock
+- Default limit of 250 following
+- Accurate time remaining and elapsed time tracking
+- In-memory pre-caching and HTTP connection pooling
+- Auto-resume and secondary rate-limit protection
 """
 
 import os
@@ -20,16 +25,40 @@ ENV_PATH = BASE_DIR / ".env"
 HISTORY_PATH = BASE_DIR / "followed_history.json"
 GITHUB_API_BASE = "https://api.github.com"
 
-# Terminal Colors
+# Terminal Colors & Styling
 CYAN = "\033[96m"
 GREEN = "\033[92m"
 YELLOW = "\033[93m"
 RED = "\033[91m"
+MAGENTA = "\033[95m"
+BLUE = "\033[94m"
 BOLD = "\033[1m"
+DIM = "\033[2m"
 RESET = "\033[0m"
 
-DEFAULT_LIMIT = 100000
-DEFAULT_DELAY = 1.0  # Fast default: 1 second between follows
+DEFAULT_LIMIT = 250
+DEFAULT_DELAY = 0.5  # Turbo speed: 0.5s
+
+
+def format_duration(seconds: float) -> str:
+    """Formats seconds into HH:MM:SS or MM:SS."""
+    s = max(0, int(seconds))
+    m, s = divmod(s, 60)
+    h, m = divmod(m, 60)
+    if h > 0:
+        return f"{h:02d}h {m:02d}m {s:02d}s"
+    return f"{m:02d}m {s:02d}s"
+
+
+def render_progress_bar(current: int, total: int, width: int = 24) -> str:
+    """Renders a modern Unicode progress bar."""
+    if total <= 0:
+        return f"[{'░' * width}] 0.0%"
+    fraction = min(max(current / total, 0.0), 1.0)
+    filled = int(width * fraction)
+    bar = f"{GREEN}{'█' * filled}{DIM}{'░' * (width - filled)}{RESET}"
+    percent = fraction * 100
+    return f"[{bar}] {BOLD}{percent:5.1f}%{RESET}"
 
 
 def clean_input(raw: str) -> str:
@@ -76,7 +105,6 @@ class HistoryManager:
     def __init__(self, path: Path):
         self.path = path
         self.history: set[str] = set()
-        self._dirty = False
         self.load()
 
     def load(self):
@@ -92,7 +120,6 @@ class HistoryManager:
         try:
             with open(self.path, "w", encoding="utf-8") as f:
                 json.dump({"followed": sorted(list(self.history))}, f, indent=2)
-            self._dirty = False
         except Exception as e:
             print(f"{YELLOW}[!] Failed to save history: {e}{RESET}")
 
@@ -100,8 +127,6 @@ class HistoryManager:
         self.history.add(username.lower())
         if auto_save:
             self.save()
-        else:
-            self._dirty = True
 
     def contains(self, username: str) -> bool:
         return username.lower() in self.history
@@ -114,7 +139,7 @@ class GitHubBot:
         self.delay = delay
         self.session = requests.Session()
 
-        # High-performance HTTP connection pooling (reuses TLS sessions)
+        # Connection pooling
         adapter = HTTPAdapter(pool_connections=50, pool_maxsize=50, max_retries=2)
         self.session.mount("https://", adapter)
         self.session.mount("http://", adapter)
@@ -123,23 +148,24 @@ class GitHubBot:
             "Accept": "application/vnd.github+json",
             "Authorization": f"Bearer {self.token}",
             "X-GitHub-Api-Version": "2022-11-28",
-            "User-Agent": "GitHub-AutoFollow-Fast/3.0",
+            "User-Agent": "GitHub-AutoFollow-Design/4.0",
         })
         self.current_user = ""
+        self.user_stats = {}
         self.history = HistoryManager(HISTORY_PATH)
 
     def verify_account(self) -> dict | None:
         """Verifies token and retrieves account information."""
         resp = self.session.get(f"{GITHUB_API_BASE}/user")
         if resp.status_code == 200:
-            data = resp.json()
-            self.current_user = data.get("login", "")
-            return data
+            self.user_stats = resp.json()
+            self.current_user = self.user_stats.get("login", "")
+            return self.user_stats
         return None
 
     def preload_current_following(self):
         """Preloads all users that current_user already follows into memory in bulk."""
-        print(f"{CYAN}[*] Fast-syncing your existing following list...{RESET}", end="", flush=True)
+        print(f" {CYAN}⚡ Syncing current following list...{RESET}", end="", flush=True)
         page = 1
         count = 0
         while True:
@@ -156,12 +182,11 @@ class GitHubBot:
                 break
             page += 1
         self.history.save()
-        print(f" {GREEN}Done ({count} accounts synced to cache).{RESET}")
+        print(f" {GREEN}Done ({count} accounts cached){RESET}\n")
 
     def follow(self, username: str) -> bool:
         """Sends PUT request to follow a GitHub user directly with auto-backoff."""
         if self.dry_run:
-            print(f"{YELLOW}[DRY-RUN]{RESET} Would follow @{username}")
             return True
 
         max_retries = 3
@@ -182,137 +207,131 @@ class GitHubBot:
                 else:
                     wait_sec = 45 * (attempt + 1)
 
-                print(f"\n{YELLOW}[!] Rate limit pause. Waiting {wait_sec}s before continuing...{RESET}")
+                print(f"\n{YELLOW}  ⚠️ Rate limit active. Pausing {wait_sec}s for cooldown...{RESET}")
                 time.sleep(wait_sec)
                 continue
 
             if resp.status_code == 404:
-                print(f"{YELLOW}[!] User @{username} not found.{RESET}")
+                print(f" {YELLOW}(Not Found){RESET}", end="")
                 return False
 
-            print(f"{RED}[!] Error following @{username}: HTTP {resp.status_code} - {resp.text}{RESET}")
+            print(f" {RED}(HTTP {resp.status_code}){RESET}", end="")
             return False
 
         return False
 
     def get_followers_of(self, target_user: str, limit: int = DEFAULT_LIMIT) -> list[str]:
-        """Fetch all followers of a given user or organization using fast pagination."""
+        """Fetch fresh, unfollowed followers of a given user or organization."""
         clean_user = clean_input(target_user)
-        users = []
+        candidates = []
         page = 1
         per_page = 100
 
-        print(f"{CYAN}[*] Fetching followers for @{clean_user}...{RESET}")
-        while len(users) < limit:
+        print(f"{CYAN}🔍 Collecting followers of @{clean_user}...{RESET}", end="", flush=True)
+        while len(candidates) < limit:
             url = f"{GITHUB_API_BASE}/users/{clean_user}/followers?per_page={per_page}&page={page}"
             resp = self.session.get(url)
             if resp.status_code != 200:
-                print(f"\n{RED}[!] Failed to fetch followers for @{clean_user} (HTTP {resp.status_code}): {resp.text}{RESET}")
                 break
-
             items = resp.json()
             if not items or not isinstance(items, list):
                 break
-
             for item in items:
-                users.append(item["login"])
-                if len(users) >= limit:
-                    break
-
-            print(f"\r  → Collected {len(users)} users (Page {page})...", end="", flush=True)
-
+                username = item["login"]
+                if not self.history.contains(username) and username.lower() != self.current_user.lower():
+                    candidates.append(username)
+                    if len(candidates) >= limit:
+                        break
             if len(items) < per_page:
                 break
-
             page += 1
 
-        print(f"\n{GREEN}[✓] Total candidates collected: {len(users)}{RESET}")
-        return users
+        print(f" {GREEN}Found {len(candidates)} new accounts to follow.{RESET}")
+        return candidates
 
     def get_contributors_of(self, repo: str, limit: int = DEFAULT_LIMIT) -> list[str]:
-        """Fetch contributors of an owner/repo."""
+        """Fetch fresh contributors of an owner/repo."""
         clean_repo = clean_input(repo)
-        users = []
+        candidates = []
         page = 1
         per_page = 100
 
-        print(f"{CYAN}[*] Fetching contributors for {clean_repo}...{RESET}")
-        while len(users) < limit:
+        print(f"{CYAN}🔍 Collecting contributors of {clean_repo}...{RESET}", end="", flush=True)
+        while len(candidates) < limit:
             url = f"{GITHUB_API_BASE}/repos/{clean_repo}/contributors?per_page={per_page}&page={page}"
             resp = self.session.get(url)
             if resp.status_code != 200:
-                print(f"\n{RED}[!] Failed to fetch contributors for {clean_repo} (HTTP {resp.status_code}): {resp.text}{RESET}")
                 break
-
             items = resp.json()
             if not items or not isinstance(items, list):
                 break
-
             for item in items:
                 if "login" in item:
-                    users.append(item["login"])
-                    if len(users) >= limit:
-                        break
-
-            print(f"\r  → Collected {len(users)} contributors (Page {page})...", end="", flush=True)
-
+                    username = item["login"]
+                    if not self.history.contains(username) and username.lower() != self.current_user.lower():
+                        candidates.append(username)
+                        if len(candidates) >= limit:
+                            break
             if len(items) < per_page:
                 break
-
             page += 1
 
-        print(f"\n{GREEN}[✓] Total contributors collected: {len(users)}{RESET}")
-        return users
+        print(f" {GREEN}Found {len(candidates)} new accounts to follow.{RESET}")
+        return candidates
 
     def search_users(self, query: str, limit: int = DEFAULT_LIMIT) -> list[str]:
-        """Search GitHub users matching a query."""
-        users = []
+        """Search fresh GitHub users matching a query."""
+        candidates = []
         page = 1
         per_page = 100
 
-        print(f"{CYAN}[*] Searching users for '{query}'...{RESET}")
-        while len(users) < limit:
+        print(f"{CYAN}🔍 Searching users for '{query}'...{RESET}", end="", flush=True)
+        while len(candidates) < limit:
             url = f"{GITHUB_API_BASE}/search/users?q={query}&per_page={per_page}&page={page}"
             resp = self.session.get(url)
             if resp.status_code != 200:
-                print(f"\n{RED}[!] Search error: HTTP {resp.status_code} - {resp.text}{RESET}")
                 break
-
             data = resp.json()
             items = data.get("items", [])
             if not items:
                 break
-
             for item in items:
-                users.append(item["login"])
-                if len(users) >= limit:
-                    break
-
-            print(f"\r  → Collected {len(users)} users (Page {page})...", end="", flush=True)
-
+                username = item["login"]
+                if not self.history.contains(username) and username.lower() != self.current_user.lower():
+                    candidates.append(username)
+                    if len(candidates) >= limit:
+                        break
             if len(items) < per_page:
                 break
-
             page += 1
 
-        print(f"\n{GREEN}[✓] Total search results collected: {len(users)}{RESET}")
-        return users
+        print(f" {GREEN}Found {len(candidates)} new accounts to follow.{RESET}")
+        return candidates
 
-    def process_targets(self, targets: list[str]):
-        """Iterates over candidates at high speed and executes follows."""
+    def print_dashboard(self, target_label: str, target_limit: int):
+        """Prints a beautiful dashboard card with ETA and time calculations."""
+        est_seconds = target_limit * self.delay
+        est_duration = format_duration(est_seconds)
+        eta_time = time.strftime("%I:%M:%S %p", time.localtime(time.time() + est_seconds))
+        speed_text = f"~{int(60 / max(self.delay, 0.1))} follows/min ({self.delay}s delay)"
+
+        box_width = 62
+        print(f"{CYAN}╭{'─' * box_width}╮{RESET}")
+        print(f"{CYAN}│{BOLD}{'⚡ GITHUB AUTO-FOLLOWER PRO ⚡':^{box_width}}{RESET}{CYAN}│{RESET}")
+        print(f"{CYAN}├{'─' * box_width}┤{RESET}")
+        print(f"{CYAN}│{RESET}  👤 {BOLD}Account:{RESET} @{self.current_user:<16}  👥 {BOLD}Followers:{RESET} {str(self.user_stats.get('followers', 0)):<15}{CYAN}│{RESET}")
+        print(f"{CYAN}│{RESET}  🎯 {BOLD}Target:{RESET}  {target_label:<16}  🔄 {BOLD}Following:{RESET} {str(self.user_stats.get('following', 0)):<15}{CYAN}│{RESET}")
+        print(f"{CYAN}│{RESET}  🎯 {BOLD}Goal:{RESET}    {str(target_limit) + ' follows':<16}  ⚡ {BOLD}Speed:{RESET}     {speed_text:<15}{CYAN}│{RESET}")
+        print(f"{CYAN}│{RESET}  ⏱️  {BOLD}Est Time:{RESET}{est_duration:<16}  🏁 {BOLD}ETA Time:{RESET}  {eta_time:<15}{CYAN}│{RESET}")
+        print(f"{CYAN}╰{'─' * box_width}╯{RESET}\n")
+
+    def process_targets(self, targets: list[str], target_limit: int = DEFAULT_LIMIT, target_label: str = "custom"):
+        """Executes follows up to target_limit with real-time UI, progress bar, and timers."""
         if not targets:
-            print(f"{YELLOW}[!] No targets to process.{RESET}")
+            print(f"{YELLOW}[!] No candidates available to process.{RESET}")
             return
 
-        total = len(targets)
-        est_seconds = int(total * self.delay)
-        hours = est_seconds // 3600
-        mins = (est_seconds % 3600) // 60
-
-        print(f"\n{CYAN}{BOLD}Starting fast follow process for {total} candidate(s)...{RESET}")
-        print(f"{GREEN}⚡ Speed: ~{int(60 / max(self.delay, 0.1))} follows/min (delay: {self.delay}s){RESET}")
-        if hours > 0:
-            print(f"{YELLOW}Estimated completion: ~{hours}h {mins}m | Stop anytime with Ctrl+C to save!{RESET}\n")
+        self.print_dashboard(target_label, target_limit)
 
         success_count = 0
         skipped_count = 0
@@ -320,40 +339,76 @@ class GitHubBot:
 
         try:
             for idx, username in enumerate(targets, 1):
-                pct = (idx / total) * 100
+                if success_count >= target_limit:
+                    break
 
                 if username.lower() == self.current_user.lower():
                     continue
 
                 # Instant in-memory check (0 HTTP requests!)
                 if self.history.contains(username):
-                    print(f"[{idx}/{total}] ({pct:.1f}%) {YELLOW}↷ Skipping @{username} (already followed){RESET}")
                     skipped_count += 1
                     continue
 
-                print(f"[{idx}/{total}] ({pct:.1f}%) {CYAN}→ Following @{username}...{RESET}", end=" ", flush=True)
-                if self.follow(username):
-                    print(f"{GREEN}✓ Followed!{RESET}")
-                    success_count += 1
-                else:
-                    print(f"{RED}✗ Failed{RESET}")
+                # Time calculations
+                elapsed_sec = time.time() - start_time
+                remaining_needed = target_limit - success_count
+                rem_seconds = remaining_needed * self.delay
+                eta_clock = time.strftime("%I:%M:%S %p", time.localtime(time.time() + rem_seconds))
 
-                # Fast delay
-                if idx < total and self.delay > 0:
+                progress_bar = render_progress_bar(success_count, target_limit, width=18)
+                elapsed_str = format_duration(elapsed_sec)
+                rem_str = format_duration(rem_seconds)
+
+                # Status Line: Progress bar + Counts + Remaining Time
+                status_header = (
+                    f"{progress_bar} {BOLD}{success_count}/{target_limit}{RESET} "
+                    f"│ ⏱️ Rem: {CYAN}{rem_str}{RESET} "
+                    f"│ 🏁 ETA: {MAGENTA}{eta_clock}{RESET}"
+                )
+
+                print(status_header)
+                print(f"  → Following {BOLD}@{username}{RESET}...", end="", flush=True)
+
+                if self.follow(username):
+                    success_count += 1
+                    if self.dry_run:
+                        print(f" {YELLOW}[DRY-RUN]{RESET}")
+                    else:
+                        print(f" {GREEN}✓ Followed!{RESET}")
+                else:
+                    print(f" {RED}✗ Skipped{RESET}")
+
+                print()  # Empty line for clean spacing
+
+                # Delay between follows
+                if success_count < target_limit and self.delay > 0:
                     time.sleep(self.delay)
 
         except KeyboardInterrupt:
-            print(f"\n\n{YELLOW}[!] Paused by user (Ctrl+C).{RESET}")
-            print(f"{GREEN}[✓] Progress saved in followed_history.json! Rerun anytime to continue.{RESET}")
+            print(f"\n{YELLOW}⚠️  Session paused by user (Ctrl+C).{RESET}")
 
-        elapsed = time.time() - start_time
-        rate = (success_count / elapsed * 60) if elapsed > 0 else 0
-        print(f"\n{BOLD}Session Summary:{RESET} {GREEN}{success_count} followed{RESET}, {YELLOW}{skipped_count} skipped ({rate:.1f} follows/min)")
+        total_elapsed = time.time() - start_time
+        avg_speed = (success_count / total_elapsed * 60) if total_elapsed > 0 else 0
+
+        # Beautiful Session Summary Card
+        box_width = 62
+        print(f"\n{GREEN}╭{'─' * box_width}╮{RESET}")
+        print(f"{GREEN}│{BOLD}{'🎉 SESSION SUMMARY':^{box_width}}{RESET}{GREEN}│{RESET}")
+        print(f"{GREEN}├{'─' * box_width}┤{RESET}")
+        print(f"{GREEN}│{RESET}  ✓ {BOLD}Successfully Followed:{RESET} {success_count} accounts{' ' * (box_width - len(str(success_count)) - 32)}{GREEN}│{RESET}")
+        print(f"{GREEN}│{RESET}  ↷ {BOLD}Skipped (Already Followed):{RESET} {skipped_count} accounts{' ' * (box_width - len(str(skipped_count)) - 36)}{GREEN}│{RESET}")
+        print(f"{GREEN}│{RESET}  ⏱️  {BOLD}Total Time Elapsed:{RESET} {format_duration(total_elapsed)}{' ' * (box_width - len(format_duration(total_elapsed)) - 29)}{GREEN}│{RESET}")
+        print(f"{GREEN}│{RESET}  ⚡ {BOLD}Average Speed:{RESET} {avg_speed:.1f} follows/min{' ' * (box_width - len(f'{avg_speed:.1f}') - 31)}{GREEN}│{RESET}")
+        print(f"{GREEN}│{RESET}  💾 {BOLD}Progress Saved To:{RESET} followed_history.json{' ' * (box_width - 48)}{GREEN}│{RESET}")
+        print(f"{GREEN}╰{'─' * box_width}╯{RESET}\n")
 
 
 def ask_limit(default_limit: int = DEFAULT_LIMIT) -> int:
-    """Asks for limit, defaulting to 100,000 (all)."""
-    lim_str = input(f"Limit (default {default_limit} / all): ").strip()
+    """Asks for limit, defaulting to 250."""
+    print(f"\n🎯 {BOLD}Follow Target Limit:{RESET}")
+    print(f"   Default is {GREEN}{BOLD}250{RESET} accounts.")
+    lim_str = input(f"   Enter limit [Press Enter for {default_limit}]: ").strip()
     if not lim_str:
         return default_limit
     try:
@@ -364,94 +419,74 @@ def ask_limit(default_limit: int = DEFAULT_LIMIT) -> int:
 
 
 def ask_speed() -> float:
-    """Lets user select their preferred speed mode."""
-    print(f"\n{BOLD}Select Speed Mode:{RESET}")
-    print(f"  1) {GREEN}⚡ Fast{RESET} (1.0s delay - ~60 follows/min) [Recommended]")
-    print(f"  2) {CYAN}🚀 Turbo{RESET} (0.5s delay - ~120 follows/min - Max Speed)")
-    print(f"  3) {YELLOW}🛡️ Safe{RESET} (2.5s delay - ~24 follows/min)")
-    print(f"  4) Custom delay in seconds")
+    """Lets user select speed mode."""
+    print(f"\n⚡ {BOLD}Select Speed Mode:{RESET}")
+    print(f"  1) {CYAN}🚀 Turbo{RESET} (0.5s delay - ~120 follows/min) [Recommended]")
+    print(f"  2) {GREEN}⚡ Fast{RESET}  (1.0s delay - ~60 follows/min)")
+    print(f"  3) {YELLOW}🛡️ Safe{RESET}  (2.0s delay - ~30 follows/min)")
 
-    choice = input("Enter choice [1-4, default 1]: ").strip()
+    choice = input("   Enter choice [1-3, default 1]: ").strip()
     if choice == "2":
-        return 0.5
+        return 1.0
     elif choice == "3":
-        return 2.5
-    elif choice == "4":
-        custom = input("Enter delay in seconds (e.g. 0.8): ").strip()
-        try:
-            return max(float(custom), 0.1)
-        except ValueError:
-            return 1.0
-    return 1.0
+        return 2.0
+    return 0.5
 
 
-def run_interactive(bot: GitHubBot, default_limit: int):
-    print(f"\n{BOLD}Choose target mode:{RESET}")
-    print("  1) Follow followers of a user or organization (e.g. laravel, torvalds, octocat)")
-    print("  2) Search users by keyword/location/language (e.g. location:Iraq, language:php)")
-    print("  3) Follow contributors of a repository (e.g. laravel/laravel, laravel/framework)")
-    print("  4) Enter specific usernames manually (comma separated)")
+def run_interactive(bot: GitHubBot, default_limit: int = DEFAULT_LIMIT):
+    print(f"{BOLD}Choose Target Mode:{RESET}")
+    print("  1) Follow followers of a user/organization (e.g. laravel, octocat)")
+    print("  2) Search active developers (e.g. location:Iraq, language:php)")
+    print("  3) Follow contributors of a repository (e.g. laravel/framework)")
+    print("  4) Enter specific usernames manually")
     print("  5) Exit")
 
     choice = input("\nEnter choice [1-5]: ").strip()
 
     if choice == "1":
-        target = input("Enter target GitHub username or URL (e.g. laravel or https://github.com/laravel): ").strip()
+        target = input("\nEnter target GitHub username or URL (e.g. laravel): ").strip()
         cleaned = clean_input(target)
         limit = ask_limit(default_limit)
         bot.delay = ask_speed()
         targets = bot.get_followers_of(cleaned, limit=limit)
+        bot.process_targets(targets, target_limit=limit, target_label=f"@{cleaned}")
 
     elif choice == "2":
-        query = input("Enter search query (e.g. location:Iraq language:python): ").strip()
+        query = input("\nEnter search query (e.g. location:Iraq language:python): ").strip()
         limit = ask_limit(default_limit)
         bot.delay = ask_speed()
         targets = bot.search_users(query, limit=limit)
+        bot.process_targets(targets, target_limit=limit, target_label=f"query:{query}")
 
     elif choice == "3":
-        raw_repo = input("Enter repository owner/repo or URL (e.g. laravel/laravel or https://github.com/laravel/laravel): ").strip()
+        raw_repo = input("\nEnter repository (e.g. laravel/framework): ").strip()
         cleaned_repo = clean_input(raw_repo)
-
         if "/" not in cleaned_repo:
-            print(f"\n{YELLOW}[!] '{cleaned_repo}' is an organization/user account, not a repository.{RESET}")
-            print(f"  Options:")
-            print(f"  a) Follow followers of @{cleaned_repo} instead")
-            print(f"  b) Follow contributors of {cleaned_repo}/{cleaned_repo}")
-            sub_choice = input("Select [a/b]: ").strip().lower()
-            if sub_choice == "a":
-                limit = ask_limit(default_limit)
-                bot.delay = ask_speed()
-                targets = bot.get_followers_of(cleaned_repo, limit=limit)
-                bot.process_targets(targets)
-                return
-            else:
-                cleaned_repo = f"{cleaned_repo}/{cleaned_repo}"
-
+            cleaned_repo = f"{cleaned_repo}/{cleaned_repo}"
         limit = ask_limit(default_limit)
         bot.delay = ask_speed()
         targets = bot.get_contributors_of(cleaned_repo, limit=limit)
+        bot.process_targets(targets, target_limit=limit, target_label=cleaned_repo)
 
     elif choice == "4":
-        raw = input("Enter usernames (separated by commas): ").strip()
+        raw = input("\nEnter usernames (separated by commas): ").strip()
         targets = [clean_input(u) for u in raw.split(",") if clean_input(u)]
         bot.delay = ask_speed()
+        bot.process_targets(targets, target_limit=len(targets), target_label="custom-list")
 
     else:
-        print("Cancelled.")
-        return
-
-    bot.process_targets(targets)
+        print("Exited.")
 
 
 def main():
-    parser = argparse.ArgumentParser(description="GitHub Auto Follow Tool (High Speed Edition)")
+    parser = argparse.ArgumentParser(description="GitHub Auto Follow Tool (Pro Design Edition)")
     parser.add_argument("--user", help="Target username or URL to follow their followers")
     parser.add_argument("--search", help="Search query (e.g. 'location:Iraq')")
     parser.add_argument("--repo", help="Target repository (e.g. 'laravel/laravel') to follow contributors")
     parser.add_argument("--list", help="Comma-separated list of usernames")
-    parser.add_argument("--limit", type=int, default=DEFAULT_LIMIT, help=f"Max accounts to process (default: {DEFAULT_LIMIT})")
+    parser.add_argument("--limit", type=int, default=DEFAULT_LIMIT, help=f"Max accounts to follow (default: {DEFAULT_LIMIT})")
     parser.add_argument("--delay", type=float, default=DEFAULT_DELAY, help=f"Seconds between follows (default: {DEFAULT_DELAY})")
-    parser.add_argument("--turbo", action="store_true", help="Turbo mode: 0.5s delay (~120 follows/min)")
+    parser.add_argument("--turbo", action="store_true", help="Run at max speed (0.5s delay)")
     parser.add_argument("--dry-run", action="store_true", help="Simulate without making actual follow requests")
 
     args = parser.parse_args()
@@ -466,29 +501,31 @@ def main():
         print(f"{RED}[!] Authentication failed. Check your token in {ENV_PATH}.{RESET}")
         sys.exit(1)
 
-    print(f"{GREEN}{BOLD}✓ Authenticated as @{user_info.get('login')}{RESET}")
-    print(f"  Followers: {user_info.get('followers')} | Following: {user_info.get('following')}\n")
-
-    # Fast sync existing following list in bulk (eliminates redundant individual GET calls)
+    # Sync following list
     bot.preload_current_following()
 
     targets = []
+    target_label = "targets"
     if args.user:
+        target_label = f"@{clean_input(args.user)}"
         targets = bot.get_followers_of(clean_input(args.user), limit=args.limit)
     elif args.search:
+        target_label = f"search:{args.search}"
         targets = bot.search_users(args.search, limit=args.limit)
     elif args.repo:
         cleaned_repo = clean_input(args.repo)
         if "/" not in cleaned_repo:
             cleaned_repo = f"{cleaned_repo}/{cleaned_repo}"
+        target_label = cleaned_repo
         targets = bot.get_contributors_of(cleaned_repo, limit=args.limit)
     elif args.list:
+        target_label = "custom-list"
         targets = [clean_input(u) for u in args.list.split(",") if clean_input(u)]
     else:
         run_interactive(bot, default_limit=args.limit)
         return
 
-    bot.process_targets(targets)
+    bot.process_targets(targets, target_limit=args.limit, target_label=target_label)
 
 
 if __name__ == "__main__":
