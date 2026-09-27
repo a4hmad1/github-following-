@@ -6,7 +6,7 @@
 
 [![Python Version](https://img.shields.io/badge/python-3.10%2B-blue.svg?style=for-the-badge&logo=python&logoColor=white)](https://www.python.org/)
 [![GitHub license](https://img.shields.io/badge/license-MIT-green.svg?style=for-the-badge)](LICENSE)
-[![GitHub Stars](https://img.shields.io/github/stars/a4hmad1/github-auto-follower?style=for-the-badge&logo=github)](https://github.com/a4hmad1/github-auto-follower/stargazers)
+[![GitHub Stars](https://img.shields.io/github/stars/a4hmad1/github-following-?style=for-the-badge&logo=github)](https://github.com/a4hmad1/github-following-/stargazers)
 [![GitHub Followers](https://img.shields.io/github/followers/a4hmad1?style=for-the-badge&logo=github&label=Follow%20%40a4hmad1)](https://github.com/a4hmad1)
 
 <p align="center">
@@ -56,8 +56,8 @@
 
 ### 1. Clone the repository
 ```bash
-git clone https://github.com/a4hmad1/github-auto-follower.git
-cd github-auto-follower
+git clone https://github.com/a4hmad1/github-following-.git
+cd github-following-
 ```
 
 ### 2. Install dependencies
