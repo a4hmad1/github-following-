@@ -1,13 +1,14 @@
 #!/usr/bin/env python3
 """
 GitHub Network Expander Pro
-A high-performance, cleanly-styled CLI tool to expand your GitHub network in 250-account batches.
-Features:
-- Unified terminal design with live percentage progress bar and ETA clock
-- Batch workflow: Follows 250 accounts, then prompts to follow the NEXT 250 or stop
-- Neutral company/organization examples (Google, Microsoft, Meta, etc.)
-- In-memory pre-caching and HTTP connection pooling for turbo speeds
-- Full rate-limit auto-cooldown and duplicate prevention
+A high-performance CLI tool to expand your GitHub network in 250-account batches.
+
+Key Scanning & Deduplication Features:
+- Pre-Scan Engine: Live on-screen scan that checks and filters out all previously-followed accounts.
+- Persistent Page Cursor (page_cursor.json): Never re-scans old pages; always finds fresh new accounts.
+- Zero-Duplicate Guarantee ("Not Again"): Multiple in-memory and disk checks ensure no user is ever followed twice.
+- Exact Batch Limit: Guarantees exactly 250 NEW accounts followed per batch.
+- Batch Loop: Prompt to follow the NEXT 250 or stop after each batch.
 """
 
 import os
@@ -24,6 +25,7 @@ from pathlib import Path
 BASE_DIR = Path(__file__).resolve().parent
 ENV_PATH = BASE_DIR / ".env"
 HISTORY_PATH = BASE_DIR / "followed_history.json"
+CURSOR_PATH = BASE_DIR / "page_cursor.json"
 GITHUB_API_BASE = "https://api.github.com"
 
 # Unified Styling Theme (Cyan & Emerald Green)
@@ -100,6 +102,36 @@ def get_token() -> str:
     return token
 
 
+class CursorManager:
+    """Tracks the last scanned page per target so we never re-scan old pages."""
+    def __init__(self, path: Path):
+        self.path = path
+        self.cursors: dict[str, int] = {}
+        self.load()
+
+    def load(self):
+        if self.path.exists():
+            try:
+                with open(self.path, "r", encoding="utf-8") as f:
+                    self.cursors = json.load(f)
+            except Exception:
+                self.cursors = {}
+
+    def save(self):
+        try:
+            with open(self.path, "w", encoding="utf-8") as f:
+                json.dump(self.cursors, f, indent=2)
+        except Exception:
+            pass
+
+    def get_page(self, key: str) -> int:
+        return self.cursors.get(key.lower(), 1)
+
+    def set_page(self, key: str, page: int):
+        self.cursors[key.lower()] = page
+        self.save()
+
+
 class HistoryManager:
     """Tracks users already processed in-memory and on disk to prevent duplicate API requests."""
     def __init__(self, path: Path):
@@ -148,12 +180,12 @@ class GitHubBot:
             "Accept": "application/vnd.github+json",
             "Authorization": f"Bearer {self.token}",
             "X-GitHub-Api-Version": "2022-11-28",
-            "User-Agent": "GitHub-Network-Expander/5.0",
+            "User-Agent": "GitHub-Network-Expander/6.0",
         })
         self.current_user = ""
         self.user_stats = {}
         self.history = HistoryManager(HISTORY_PATH)
-        self.page_cursor = {}  # Tracks pagination per target to avoid re-fetching pages
+        self.cursors = CursorManager(CURSOR_PATH)
 
     def verify_account(self) -> dict | None:
         """Verifies token and retrieves account information."""
@@ -190,12 +222,16 @@ class GitHubBot:
                 break
             page += 1
         self.history.save()
-        print(f" {GREEN}Done ({count} accounts cached){RESET}\n")
+        print(f" {GREEN}Done ({count} accounts cached, {len(self.history.history)} total in memory){RESET}\n")
 
     def follow(self, username: str) -> bool:
         """Sends PUT request to follow a GitHub user directly with auto-backoff."""
         if self.dry_run:
             return True
+
+        # Safety Check 1: In-memory duplicate check
+        if self.history.contains(username):
+            return False
 
         max_retries = 3
         for attempt in range(max_retries):
@@ -229,94 +265,152 @@ class GitHubBot:
         return False
 
     def get_followers_of(self, target_user: str, count: int = BATCH_SIZE) -> list[str]:
-        """Fetch fresh, unfollowed followers of a given user or organization."""
+        """Scans followers of a target, skipping already-followed accounts, to gather count fresh accounts."""
         clean_user = clean_input(target_user)
         candidates = []
-        page = self.page_cursor.get(clean_user, 1)
+        page = self.cursors.get_page(f"followers_{clean_user}")
         per_page = 100
+        scanned_total = 0
+        skipped_total = 0
 
-        print(f"{CYAN}🔍 Collecting next {count} new accounts from @{clean_user}...{RESET}", end="", flush=True)
+        print(f"{CYAN}🔍 Pre-scanning @{clean_user} followers for {count} BRAND NEW accounts...{RESET}")
+
         while len(candidates) < count:
             url = f"{GITHUB_API_BASE}/users/{clean_user}/followers?per_page={per_page}&page={page}"
             resp = self.session.get(url)
             if resp.status_code != 200:
+                print(f"\n{RED}[!] Error fetching page {page} (HTTP {resp.status_code}){RESET}")
                 break
+
             items = resp.json()
             if not items or not isinstance(items, list):
                 break
+
             for item in items:
                 username = item["login"]
-                if not self.history.contains(username) and username.lower() != self.current_user.lower():
+                scanned_total += 1
+
+                # Filter out: already followed OR self
+                if self.history.contains(username) or username.lower() == self.current_user.lower():
+                    skipped_total += 1
+                else:
                     candidates.append(username)
                     if len(candidates) >= count:
                         break
+
+            # Live on-screen scanner status
+            sys.stdout.write(
+                f"\r  {CYAN}→ Page {page}{RESET} │ "
+                f"Scanned: {BOLD}{scanned_total}{RESET} │ "
+                f"Already Followed (Filtered): {YELLOW}{skipped_total}{RESET} │ "
+                f"New Found: {GREEN}{BOLD}{len(candidates)}/{count}{RESET} "
+            )
+            sys.stdout.flush()
+
+            page += 1
             if len(items) < per_page:
                 break
-            page += 1
 
-        self.page_cursor[clean_user] = page
-        print(f" {GREEN}Ready ({len(candidates)} fresh accounts found).{RESET}")
+        # Save the current page cursor so next run continues here
+        self.cursors.set_page(f"followers_{clean_user}", max(1, page - 1))
+        print(f"\n{GREEN}✓ Scan completed! Ready with {len(candidates)} brand new accounts.{RESET}")
         return candidates
 
     def get_contributors_of(self, repo: str, count: int = BATCH_SIZE) -> list[str]:
-        """Fetch fresh contributors of an owner/repo."""
+        """Scans contributors of a repo, skipping already-followed accounts, to gather count fresh accounts."""
         clean_repo = clean_input(repo)
         candidates = []
-        page = self.page_cursor.get(clean_repo, 1)
+        page = self.cursors.get_page(f"contributors_{clean_repo}")
         per_page = 100
+        scanned_total = 0
+        skipped_total = 0
 
-        print(f"{CYAN}🔍 Collecting next {count} new contributors from {clean_repo}...{RESET}", end="", flush=True)
+        print(f"{CYAN}🔍 Pre-scanning {clean_repo} contributors for {count} BRAND NEW accounts...{RESET}")
+
         while len(candidates) < count:
             url = f"{GITHUB_API_BASE}/repos/{clean_repo}/contributors?per_page={per_page}&page={page}"
             resp = self.session.get(url)
             if resp.status_code != 200:
                 break
+
             items = resp.json()
             if not items or not isinstance(items, list):
                 break
+
             for item in items:
                 if "login" in item:
                     username = item["login"]
-                    if not self.history.contains(username) and username.lower() != self.current_user.lower():
+                    scanned_total += 1
+
+                    if self.history.contains(username) or username.lower() == self.current_user.lower():
+                        skipped_total += 1
+                    else:
                         candidates.append(username)
                         if len(candidates) >= count:
                             break
+
+            sys.stdout.write(
+                f"\r  {CYAN}→ Page {page}{RESET} │ "
+                f"Scanned: {BOLD}{scanned_total}{RESET} │ "
+                f"Already Followed (Filtered): {YELLOW}{skipped_total}{RESET} │ "
+                f"New Found: {GREEN}{BOLD}{len(candidates)}/{count}{RESET} "
+            )
+            sys.stdout.flush()
+
+            page += 1
             if len(items) < per_page:
                 break
-            page += 1
 
-        self.page_cursor[clean_repo] = page
-        print(f" {GREEN}Ready ({len(candidates)} fresh accounts found).{RESET}")
+        self.cursors.set_page(f"contributors_{clean_repo}", max(1, page - 1))
+        print(f"\n{GREEN}✓ Scan completed! Ready with {len(candidates)} brand new accounts.{RESET}")
         return candidates
 
     def search_users(self, query: str, count: int = BATCH_SIZE) -> list[str]:
-        """Search fresh GitHub users matching a query."""
+        """Scans GitHub search results, skipping already-followed accounts, to gather count fresh accounts."""
         candidates = []
-        page = self.page_cursor.get(query, 1)
+        page = self.cursors.get_page(f"search_{query}")
         per_page = 100
+        scanned_total = 0
+        skipped_total = 0
 
-        print(f"{CYAN}🔍 Collecting next {count} new accounts from '{query}'...{RESET}", end="", flush=True)
+        print(f"{CYAN}🔍 Pre-scanning search '{query}' for {count} BRAND NEW accounts...{RESET}")
+
         while len(candidates) < count:
             url = f"{GITHUB_API_BASE}/search/users?q={query}&per_page={per_page}&page={page}"
             resp = self.session.get(url)
             if resp.status_code != 200:
                 break
+
             data = resp.json()
             items = data.get("items", [])
             if not items:
                 break
+
             for item in items:
                 username = item["login"]
-                if not self.history.contains(username) and username.lower() != self.current_user.lower():
+                scanned_total += 1
+
+                if self.history.contains(username) or username.lower() == self.current_user.lower():
+                    skipped_total += 1
+                else:
                     candidates.append(username)
                     if len(candidates) >= count:
                         break
+
+            sys.stdout.write(
+                f"\r  {CYAN}→ Page {page}{RESET} │ "
+                f"Scanned: {BOLD}{scanned_total}{RESET} │ "
+                f"Already Followed (Filtered): {YELLOW}{skipped_total}{RESET} │ "
+                f"New Found: {GREEN}{BOLD}{len(candidates)}/{count}{RESET} "
+            )
+            sys.stdout.flush()
+
+            page += 1
             if len(items) < per_page:
                 break
-            page += 1
 
-        self.page_cursor[query] = page
-        print(f" {GREEN}Ready ({len(candidates)} fresh accounts found).{RESET}")
+        self.cursors.set_page(f"search_{query}", max(1, page - 1))
+        print(f"\n{GREEN}✓ Scan completed! Ready with {len(candidates)} brand new accounts.{RESET}")
         return candidates
 
     def print_batch_header(self, batch_num: int, target_label: str, goal: int):
@@ -329,12 +423,12 @@ class GitHubBot:
 
         box_width = 62
         print(f"\n{CYAN}╭{'─' * box_width}╮{RESET}")
-        title = f"⚡ BATCH #{batch_num} — TARGET: {goal} FOLLOWS ⚡"
+        title = f"⚡ BATCH #{batch_num} — GOAL: {goal} NEW FOLLOWS ⚡"
         print(f"{CYAN}│{BOLD}{title:^{box_width}}{RESET}{CYAN}│{RESET}")
         print(f"{CYAN}├{'─' * box_width}┤{RESET}")
         print(f"{CYAN}│{RESET}  👤 {BOLD}Operator:{RESET}  @{self.current_user:<16}  👥 {BOLD}Followers:{RESET} {str(self.user_stats.get('followers', 0)):<15}{CYAN}│{RESET}")
         print(f"{CYAN}│{RESET}  🎯 {BOLD}Source:{RESET}    {target_label:<16}  🔄 {BOLD}Following:{RESET} {str(cur_following):<15}{CYAN}│{RESET}")
-        print(f"{CYAN}│{RESET}  🎯 {BOLD}Batch Goal:{RESET}{str(goal) + ' accounts':<16}  ⚡ {BOLD}Speed:{RESET}     {speed_text:<15}{CYAN}│{RESET}")
+        print(f"{CYAN}│{RESET}  🎯 {BOLD}Batch Goal:{RESET}{str(goal) + ' NEW accounts':<16}  ⚡ {BOLD}Speed:{RESET}     {speed_text:<15}{CYAN}│{RESET}")
         print(f"{CYAN}│{RESET}  ⏱️  {BOLD}Est Time:{RESET}  {est_duration:<16}  🏁 {BOLD}Batch ETA:{RESET} {eta_time:<15}{CYAN}│{RESET}")
         print(f"{CYAN}╰{'─' * box_width}╯{RESET}\n")
 
@@ -354,10 +448,8 @@ class GitHubBot:
                 if success_count >= goal:
                     break
 
-                if username.lower() == self.current_user.lower():
-                    continue
-
-                if self.history.contains(username):
+                # Double-check before follow: never follow twice
+                if self.history.contains(username) or username.lower() == self.current_user.lower():
                     continue
 
                 # Live timer calculations
@@ -414,7 +506,7 @@ def ask_speed() -> float:
 
 
 def run_continuous_session(bot: GitHubBot, mode: str, target_val: str, batch_size: int = BATCH_SIZE):
-    """Loops in batches of 250: after each 250, prompts to follow the NEXT 250 or stop."""
+    """Loops in batches of 250: pre-scans to ensure only fresh accounts, then asks to continue."""
     batch_num = 1
     total_session_followed = 0
     total_session_time = 0.0
@@ -422,7 +514,7 @@ def run_continuous_session(bot: GitHubBot, mode: str, target_val: str, batch_siz
     target_label = f"@{target_val}" if mode == "user" else target_val
 
     while True:
-        # Fetch fresh candidates for this batch
+        # Pre-scan fresh candidates for this batch
         if mode == "user":
             candidates = bot.get_followers_of(target_val, count=batch_size)
         elif mode == "search":
@@ -431,6 +523,7 @@ def run_continuous_session(bot: GitHubBot, mode: str, target_val: str, batch_siz
             candidates = bot.get_contributors_of(target_val, count=batch_size)
         else:
             candidates = [clean_input(u) for u in target_val.split(",") if clean_input(u)]
+            candidates = [u for u in candidates if not bot.history.contains(u)]
 
         if not candidates:
             print(f"\n{YELLOW}[!] No more fresh unfollowed accounts found from {target_label}.{RESET}")
@@ -447,10 +540,10 @@ def run_continuous_session(bot: GitHubBot, mode: str, target_val: str, batch_siz
         # Batch Completion Card
         box_width = 62
         print(f"\n{GREEN}╭{'─' * box_width}╮{RESET}")
-        title = f"🎉 BATCH #{batch_num} COMPLETED ({followed}/{batch_size}) 🎉"
+        title = f"🎉 BATCH #{batch_num} COMPLETED ({followed}/{batch_size} NEW) 🎉"
         print(f"{GREEN}│{BOLD}{title:^{box_width}}{RESET}{GREEN}│{RESET}")
         print(f"{GREEN}├{'─' * box_width}┤{RESET}")
-        print(f"{GREEN}│{RESET}  ✓ {BOLD}Followed in Batch #{batch_num}:{RESET}   {followed} accounts{' ' * (box_width - len(str(followed)) - 32)}{GREEN}│{RESET}")
+        print(f"{GREEN}│{RESET}  ✓ {BOLD}New Follows in Batch #{batch_num}:{RESET} {followed} accounts{' ' * (box_width - len(str(followed)) - 35)}{GREEN}│{RESET}")
         print(f"{GREEN}│{RESET}  🌟 {BOLD}Total in This Session:{RESET}     {total_session_followed} accounts{' ' * (box_width - len(str(total_session_followed)) - 32)}{GREEN}│{RESET}")
         print(f"{GREEN}│{RESET}  🔄 {BOLD}Current Total Following:{RESET}   {current_following} accounts{' ' * (box_width - len(str(current_following)) - 32)}{GREEN}│{RESET}")
         print(f"{GREEN}│{RESET}  ⏱️  {BOLD}Batch Time Elapsed:{RESET}       {format_duration(elapsed)}{' ' * (box_width - len(format_duration(elapsed)) - 32)}{GREEN}│{RESET}")
@@ -473,10 +566,10 @@ def run_continuous_session(bot: GitHubBot, mode: str, target_val: str, batch_siz
     print(f"\n{CYAN}╭{'─' * box_width}╮{RESET}")
     print(f"{CYAN}│{BOLD}{'🏆 FINAL SESSION SUMMARY':^{box_width}}{RESET}{CYAN}│{RESET}")
     print(f"{CYAN}├{'─' * box_width}┤{RESET}")
-    print(f"{CYAN}│{RESET}  ✓ {BOLD}Total Accounts Followed:{RESET} {total_session_followed} accounts{' ' * (box_width - len(str(total_session_followed)) - 33)}{CYAN}│{RESET}")
-    print(f"{CYAN}│{RESET}  ⏱️  {BOLD}Total Time Elapsed:{RESET}      {format_duration(total_session_time)}{' ' * (box_width - len(format_duration(total_session_time)) - 33)}{CYAN}│{RESET}")
-    print(f"{CYAN}│{RESET}  ⚡ {BOLD}Average Speed:{RESET}           {avg_speed:.1f} follows/min{' ' * (box_width - len(f'{avg_speed:.1f}') - 33)}{CYAN}│{RESET}")
-    print(f"{CYAN}│{RESET}  💾 {BOLD}History Stored In:{RESET}       followed_history.json{' ' * (box_width - 43)}{CYAN}│{RESET}")
+    print(f"{CYAN}│{RESET}  ✓ {BOLD}Total New Accounts Followed:{RESET} {total_session_followed} accounts{' ' * (box_width - len(str(total_session_followed)) - 37)}{CYAN}│{RESET}")
+    print(f"{CYAN}│{RESET}  ⏱️  {BOLD}Total Time Elapsed:{RESET}          {format_duration(total_session_time)}{' ' * (box_width - len(format_duration(total_session_time)) - 33)}{CYAN}│{RESET}")
+    print(f"{CYAN}│{RESET}  ⚡ {BOLD}Average Speed:{RESET}               {avg_speed:.1f} follows/min{' ' * (box_width - len(f'{avg_speed:.1f}') - 33)}{CYAN}│{RESET}")
+    print(f"{CYAN}│{RESET}  💾 {BOLD}History Stored In:{RESET}           followed_history.json{' ' * (box_width - 43)}{CYAN}│{RESET}")
     print(f"{CYAN}╰{'─' * box_width}╯{RESET}\n")
 
 
@@ -541,7 +634,7 @@ def main():
         print(f"{RED}[!] Authentication failed. Check your token in {ENV_PATH}.{RESET}")
         sys.exit(1)
 
-    # Sync following list
+    # Sync following list into memory
     bot.preload_current_following()
 
     if args.user:

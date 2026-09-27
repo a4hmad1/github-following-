@@ -1,4 +1,5 @@
 .env
 followed_history.json
+page_cursor.json
 __pycache__/
 *.pyc
