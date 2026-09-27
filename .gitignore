@@ -4,5 +4,7 @@ page_cursor.json
 daily_state.json
 follows.log
 *.log
+autopilot.pid
+*.pid
 __pycache__/
 *.pyc

@@ -99,7 +99,31 @@ GITHUB_TOKEN=ghp_yourTokenHere
 
 ## 💻 Usage Guide
 
-### 1. Interactive Daily Start (Recommended)
+### ⚡ 1. The One-Command Launcher (Runs & Works 24/7)
+Run **just one command**:
+```bash
+./start.sh
+```
+- Starts Auto-Pilot (250 follows ➔ 30-min countdown ➔ repeat) in the background.
+- Streams live progress.
+- You can press `Ctrl+C` or close your terminal at any time — **the bot keeps working 24/7!**
+- Automatically re-launches after computer reboot.
+
+```bash
+# To check live progress anytime:
+./status.sh
+
+# To stop the bot:
+./stop.sh
+
+# Optional: filter by gender with one command:
+./start.sh female    # Kurdish Girls Only
+./start.sh male      # Kurdish Boys Only
+```
+
+---
+
+### 2. Interactive Menu
 Simply run:
 ```bash
 python3 autofollow.py
