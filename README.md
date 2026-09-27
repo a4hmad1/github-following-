@@ -1,8 +1,8 @@
 <div align="center">
 
-# ⚡ GitHub Network Expander Pro
+# ☀️ Kurdish Developer Auto-Follow Pro
 
-**A blazing-fast, intelligent, and resilient CLI automation tool for GitHub networking in 250-account batches.**
+**An automated, intelligent CLI tool to discover and connect with Kurdish developers across GitHub.**
 
 [![Python Version](https://img.shields.io/badge/python-3.10%2B-blue.svg?style=for-the-badge&logo=python&logoColor=white)](https://www.python.org/)
 [![GitHub license](https://img.shields.io/badge/license-MIT-green.svg?style=for-the-badge)](LICENSE)
@@ -10,12 +10,11 @@
 [![GitHub Followers](https://img.shields.io/github/followers/a4hmad1?style=for-the-badge&logo=github&label=Follow%20%40a4hmad1)](https://github.com/a4hmad1)
 
 <p align="center">
-  <a href="#-key-features">Key Features</a> •
-  <a href="#-batch-workflow">Batch Workflow</a> •
+  <a href="#-overview">Overview</a> •
+  <a href="#-kurdish-discovery-engine">Kurdish Discovery</a> •
+  <a href="#-daily-automation">Daily Automation</a> •
   <a href="#-installation">Installation</a> •
-  <a href="#-token-setup">Token Setup</a> •
-  <a href="#-usage-guide">Usage Guide</a> •
-  <a href="#-rate-limit--safety-shield">Safety Shield</a>
+  <a href="#-usage-guide">Usage Guide</a>
 </p>
 
 </div>
@@ -24,81 +23,64 @@
 
 ## 🚀 Overview
 
-**GitHub Network Expander Pro** is a high-performance Python utility engineered to help developers grow their open-source network efficiently. Designed with a **250-account batch workflow**, unified styling, live percentage progress, in-memory pre-caching, and intelligent rate-limit backoff, it provides maximum speed with total reliability.
+**Kurdish Developer Auto-Follow Pro** is an open-source utility built exclusively to connect you with Kurdish developers (both boys and girls) worldwide. 
+
+Instead of manual searches, it automatically scans GitHub across all Kurdish cities, regions, bios, and communities—following **250 brand-new Kurdish developers per day** while ensuring zero duplicate follows.
 
 ---
 
-## ✨ Key Features
+## ☀️ Kurdish Discovery Engine
 
-- **⚡ Turbo Engine (~150 Follows/min)**: Reuses HTTP keep-alive connection pooling (`requests.adapters.HTTPAdapter`) to eliminate TLS handshake overhead.
-- **👩/👨 Intelligent Gender Filter**: Filter profiles to target **Girls / Female** or **Boys / Male** by scanning profile pronouns (`she/her`, `he/him`), bio keywords, real names, and usernames.
-- **🔄 Smart 250 Batch Workflow**: Automatically follows 250 fresh accounts, displays completion stats, and prompts you to continue with the next 250 or stop.
-- **🔍 Live Pre-Scan Engine**: Actively scans and filters candidate lists before following to guarantee 100% brand-new accounts.
-- **📊 Unified Progress Dashboard**: Sleek Cyan & Emerald Green theme with live percentage progress bar, remaining countdown timer, and exact finishing ETA.
-- **🧠 In-Memory Smart Cache**: Bulk pre-syncs your current following list into memory at launch. Eliminates redundant check requests, doubling execution speed.
-- **🛡️ Adaptive Rate-Limit Shield**: Actively inspects response headers (`x-ratelimit-reset`, `Retry-After`). Pauses automatically during rate limit cooldowns and resumes without dying.
-- **💾 Safe Pause & Auto-Resume**: Tracks every processed user in `followed_history.json`. Stop at any time with `Ctrl+C` and restart without duplicate follows.
-- **🔗 Smart URL Cleaning**: Paste raw input like `https://github.com/google`, `@microsoft`, or `owner/repo`—the tool automatically extracts clean identifiers.
+The tool automatically searches and cycles through 18+ Kurdish developer vectors:
+
+- 📍 **Cities & Regions**: Erbil (Hawler), Sulaymaniyah (Slemani), Duhok, Kirkuk, Halabja, Zakho, Kalar, Ranya, Diyarbakir, Mahabad, Sanandaj, Qamishlo.
+- 🏷️ **Bio & Community Keywords**: `Kurdistan`, `Kurdish`, `kurd`, `کوردستان`, `کورد`.
+- 🔍 **Freshness Scanner**: Automatically filters out accounts you already follow and saves page positions in `page_cursor.json` so you always find new developers.
 
 ---
 
-## 🔄 Batch Workflow
+## 🔄 Daily Batch & 24h Daemon Workflow
 
 ```text
 ╭──────────────────────────────────────────────────────────────╮
-│               ⚡ BATCH #1 — TARGET: 250 FOLLOWS ⚡            │
+│           ☀️ KURDISH DEVELOPER NETWORK EXPANDER ☀️           │
 ├──────────────────────────────────────────────────────────────┤
-│  👤 Operator:  @a4hmad1          👥 Followers: 26             │
-│  🎯 Source:    @google           🔄 Following: 537            │
-│  🎯 Batch Goal:250 accounts      ⚡ Speed:     ~120/min       │
-│  ⏱️  Est Time:  02m 05s          🏁 Batch ETA: 08:55 PM       │
+│  👤 Operator:  @a4hmad1           👥 Followers: 27             │
+│  📍 Target:    Kurdish Devs      🔄 Following: 537            │
+│  🎯 Daily Goal:250 Kurdish Devs  ⚡ Speed:     ~120/min       │
+│  ⏱️  Est Time:  02m 05s           🏁 Batch ETA: 09:15 PM       │
 ╰──────────────────────────────────────────────────────────────╯
 
-[████████████████░░░░]  78.4% (196/250) │ ⏱️ Rem: 00m 27s │ 🏁 ETA: 08:55 PM
-  → Following @johndoe... ✓ Followed!
+[████████████████░░░░]  78.4% (196/250) │ ⏱️ Rem: 00m 27s │ 🏁 ETA: 09:15 PM
+  → Following @PawanOsman [📍 Sulaymaniyah]... ✓ Followed!
+  → Following @HekarNizarki [📍 Duhok]... ✓ Followed!
+  → Following @ShahramShakiba [📍 Erbil]... ✓ Followed!
 
 ╭──────────────────────────────────────────────────────────────╮
-│                 🎉 BATCH #1 COMPLETED (250/250) 🎉           │
+│     ☀️ TODAY'S BATCH COMPLETED (250/250 NEW KURDISH DEVS) ☀️ │
 ├──────────────────────────────────────────────────────────────┤
-│  ✓ Followed in Batch #1:   250 accounts                       │
-│  🌟 Total in This Session: 250 accounts                       │
-│  🔄 Current Total Following: 787 accounts                     │
-│  ⏱️  Batch Time Elapsed:   02m 04s                            │
+│  ✓ Kurdish Devs Followed Today: 250 accounts                  │
+│  🔄 Current Total Following:     787 accounts                 │
+│  ⏱️  Time Elapsed:                 02m 04s                     │
+│  💾 Saved To:                     followed_history.json       │
 ╰──────────────────────────────────────────────────────────────╯
-
-What would you like to do next?
-  1) 🚀 Start following NEXT 250 accounts [Press Enter]
-  2) 🛑 Stop and exit session
 ```
 
 ---
 
 ## 📦 Installation
 
-### 1. Clone the repository
 ```bash
 git clone https://github.com/a4hmad1/github-following-.git
 cd github-following-
-```
-
-### 2. Install dependencies
-```bash
 pip install -r requirements.txt
 ```
 
----
-
-## 🔑 Token Setup
-
-1. Go to **[GitHub Token Settings (Classic)](https://github.com/settings/tokens)**.
-2. Click **Generate new token (classic)**.
-3. Select **ONLY** the scope:
-   - `[x] user:follow` (Allows following and unfollowing users).
-4. Create `.env` from template:
+### Configure Your Token:
 ```bash
 cp .env.example .env
 ```
-5. Put your token in `.env`:
+Edit `.env`:
 ```env
 GITHUB_TOKEN=ghp_yourTokenHere
 ```
@@ -107,75 +89,39 @@ GITHUB_TOKEN=ghp_yourTokenHere
 
 ## 💻 Usage Guide
 
-### 1. Interactive Menu Mode
-Run without flags to open the interactive command console:
+### 1. Run Today's Batch (250 Kurdish Devs)
+Simply run the script and press **Enter**:
 ```bash
 python3 autofollow.py
 ```
-```text
-Choose Target Source:
-  1) Follow followers of a company or organization (e.g. google, microsoft, meta)
-  2) Search active developers by keywords (e.g. location:Iraq, language:python)
-  3) Follow contributors of a repository (e.g. facebook/react, flutter/flutter)
-  4) Enter specific usernames manually
-  5) Exit
+*(Finds 250 fresh Kurdish developers across Erbil, Sulaymaniyah, Duhok, etc., and follows them safely).*
+
+---
+
+### 2. Automatic Daily Daemon Mode (Continuous Every 24 Hours)
+Run continuously in the background—it will follow 250 Kurdish developers, sleep for 24 hours, and repeat automatically every day:
+```bash
+python3 autofollow.py --daily
 ```
 
 ---
 
-### 2. Command-Line Direct Modes
-
-#### A. Target Company / Organization Followers
+### 3. Run in the Background (Headless)
+If you want to leave it running on your machine:
 ```bash
-# Follow followers of Google in 250 batches
-python3 autofollow.py --user google
-
-# Follow followers of Microsoft at turbo speed
-python3 autofollow.py --user microsoft --turbo
+nohup python3 autofollow.py --daily > daily.log 2>&1 &
 ```
-
-#### B. Search Active Developers by Tech Stack or Location
+To check live logs:
 ```bash
-# Target Python developers in a specific country
-python3 autofollow.py --search "location:Iraq language:python"
-
-# Target developers in follow-back communities
-python3 autofollow.py --search "follow-back"
-```
-
-#### C. Follow Active Contributors of a Repository
-```bash
-python3 autofollow.py --repo facebook/react
-python3 autofollow.py --repo flutter/flutter
-```
-
-#### D. Filter by Gender (Girls or Boys)
-```bash
-# Follow ONLY girls/female developers from Google
-python3 autofollow.py --user google --gender girl
-
-# Follow ONLY girls/female developers from a search query
-python3 autofollow.py --search "location:Iraq" --gender girl
-
-# Follow ONLY boys/male developers
-python3 autofollow.py --user microsoft --gender boy
-```
-
-#### E. Dry-Run Mode (Simulation)
-Preview targets without sending real follow requests:
-```bash
-python3 autofollow.py --user google --dry-run
+tail -f daily.log
 ```
 
 ---
 
-## 🛡️ Rate Limit & Safety Shield
-
-> [!IMPORTANT]
-> **GitHub Anti-Abuse Compliance**
-> - Standard personal access tokens allow up to **5,000 requests per hour**.
-> - The **250-account batch workflow** provides natural checkpoints to monitor your network growth responsibly.
-> - Automatic backoff on HTTP `403` / `429` secondary rate limits ensures your account stays safe.
+## 🛡️ Anti-Ban & Safety Features
+- **Zero Duplicate Guarantee**: Synchronizes your following list into memory at launch; you will never follow the same developer twice.
+- **Safe Batch Size**: 250 follows per day stays safely within GitHub's abuse limits.
+- **Auto-Cooldown Protection**: Automatically backs off if GitHub signals rate limits.
 
 ---
 
@@ -189,6 +135,6 @@ Distributed under the **MIT License**. See `LICENSE` for more information.
 
 Developed with ❤️ by [**@a4hmad1**](https://github.com/a4hmad1)
 
-⭐ **Star this repository if you find it helpful!**
+☀️ **Dedicated to the Kurdish Developer Community** ☀️
 
 </div>

@@ -1,15 +1,15 @@
 #!/usr/bin/env python3
 """
-GitHub Network Expander Pro
-A high-performance CLI tool to expand your GitHub network in 250-account batches.
+☀️ Kurdish Developer Auto-Follow Pro
+Automated tool to discover and follow Kurdish developers (boys & girls) across GitHub.
 
-Features:
-- Gender Filter Engine (Girls / Boys / All): Scans profile pronouns, bio keywords, real name, and username.
-- Pre-Scan Engine: Live on-screen scan that checks and filters out all previously-followed accounts.
-- Persistent Page Cursor (page_cursor.json): Never re-scans old pages; always finds fresh new accounts.
-- Zero-Duplicate Guarantee ("Not Again"): Multiple in-memory and disk checks ensure no user is ever followed twice.
-- Exact Batch Limit: Guarantees exactly 250 NEW accounts followed per batch.
-- Batch Loop: Prompt to follow the NEXT 250 or stop after each batch.
+Key Features:
+- Comprehensive Kurdish Discovery Engine: Scans all Kurdish cities, regions, and bios
+  (Kurdistan, Erbil, Sulaymaniyah, Duhok, Kirkuk, Hawler, Halabja, Zakho, etc.)
+- Daily 250 Batch Limit: Follows exactly 250 fresh Kurdish developers per run
+- Automatic Daily Mode (--daily): Runs 250 follows, then sleeps 24h and repeats automatically
+- Zero Duplicates ("Not Again"): Never follows the same developer twice
+- Real-time Dashboard with progress bar, location tags, and ETA timers
 """
 
 import os
@@ -21,143 +21,52 @@ import argparse
 import requests
 from requests.adapters import HTTPAdapter
 from pathlib import Path
+from datetime import datetime
 
 # Paths
 BASE_DIR = Path(__file__).resolve().parent
 ENV_PATH = BASE_DIR / ".env"
 HISTORY_PATH = BASE_DIR / "followed_history.json"
 CURSOR_PATH = BASE_DIR / "page_cursor.json"
+DAILY_STATE_PATH = BASE_DIR / "daily_state.json"
 GITHUB_API_BASE = "https://api.github.com"
 
-# Unified Styling Theme (Cyan & Emerald Green)
-CYAN = "\033[96m"
+# Kurdish Flag / Theme Colors (Red, Green, Yellow, Cyan, White)
+RED = "\033[91m"
 GREEN = "\033[92m"
 YELLOW = "\033[93m"
-RED = "\033[91m"
+CYAN = "\033[96m"
 MAGENTA = "\033[95m"
 BLUE = "\033[94m"
+WHITE = "\033[97m"
 BOLD = "\033[1m"
 DIM = "\033[2m"
 RESET = "\033[0m"
 
-BATCH_SIZE = 250
+DAILY_BATCH_LIMIT = 250
 DEFAULT_DELAY = 0.5  # Turbo speed: 0.5s
 
-# ==========================================
-# Comprehensive Gender Detection Datasets
-# ==========================================
-FEMALE_PRONOUNS = [
-    "she/her", "she / her", "she/hers", "she / hers", "she/they", "she / they",
-    "her/she", "she/them", "they/she", "her / she"
+# Comprehensive Kurdish Search Vectors (Locations & Keywords)
+KURDISH_SEARCH_VECTORS = [
+    ("location:Kurdistan", "Kurdistan"),
+    ("location:Erbil", "Erbil"),
+    ("location:Sulaymaniyah", "Sulaymaniyah"),
+    ("location:Duhok", "Duhok"),
+    ("location:Hawler", "Hawler"),
+    ("location:Slemani", "Slemani"),
+    ("location:Kirkuk", "Kirkuk"),
+    ("location:Halabja", "Halabja"),
+    ("location:Zakho", "Zakho"),
+    ("location:Ranya", "Ranya"),
+    ("location:Kalar", "Kalar"),
+    ("location:Diyarbakir", "Diyarbakir"),
+    ("location:Mahabad", "Mahabad"),
+    ("location:Sanandaj", "Sanandaj"),
+    ("Kurdish in:bio", "Kurdish bio"),
+    ("Kurdistan in:bio", "Kurdistan bio"),
+    ("کوردستان in:bio", "کوردستان bio"),
+    ("کورد in:bio", "کورد bio"),
 ]
-
-MALE_PRONOUNS = [
-    "he/him", "he / him", "he/his", "he / his", "he/they", "he / they",
-    "him/he", "he/them", "they/he", "him / he"
-]
-
-FEMALE_BIO_KEYWORDS = [
-    "woman in tech", "women in tech", "women who code", "girls who code",
-    "pyladies", "shecodes", "djangogirls", "railsgirls", "girlscript",
-    "female developer", "female software engineer", "girl developer",
-    "mother", "mom", "lady", "sister", "wife", "queen", "actress"
-]
-
-MALE_BIO_KEYWORDS = [
-    "father", "dad", "husband", "brother", "guy", "boy developer", "king"
-]
-
-# Comprehensive Female First Names (Western, Arabic, Middle Eastern, Asian, Hispanic, Slavic)
-FEMALE_NAMES = {
-    # English & Western
-    "sarah", "sara", "emily", "jessica", "ashley", "amanda", "jennifer", "stephanie", "nicole",
-    "elizabeth", "megan", "hannah", "rachel", "lauren", "samantha", "victoria", "chloe", "olivia",
-    "emma", "ava", "sophia", "isabella", "mia", "charlotte", "amelia", "harper", "evelyn", "abigail",
-    "ella", "camila", "luna", "sofia", "avery", "millie", "grace", "zoey", "penelope", "lily",
-    "eleanor", "lillian", "addison", "aubrey", "ellie", "stella", "natalie", "zoe", "leah", "hazel",
-    "violet", "aurora", "savannah", "audrey", "brooklyn", "bella", "claire", "skylar", "lucy",
-    "anna", "caroline", "genesis", "emilia", "kennedy", "maya", "willow", "kinsley", "naomi",
-    "elena", "ariana", "allison", "gabriella", "alice", "madelyn", "cora", "ruby", "eva", "clara",
-    "julia", "laura", "maria", "alina", "daria", "natasha", "polina", "valeria", "yulia", "anastasia",
-    "daphne", "chelsea", "diana", "helen", "nancy", "linda", "patricia", "barbara", "susan", "karen",
-    "lisa", "betty", "margaret", "dorothy", "sandra", "carol", "ruth", "sharon", "michelle", "laura",
-    "kimberly", "deborah", "amy", "angela", "rebecca", "cynthia", "kathleen", "pamela", "vanessa",
-    # Arabic & Middle Eastern
-    "fatima", "fatimah", "zahra", "maryam", "mariam", "noor", "nour", "zainab", "zeinab", "aya",
-    "ayah", "layla", "leila", "yasmin", "yasmine", "reem", "rania", "salma", "huda", "mona", "dina",
-    "nada", "maha", "lina", "leena", "amina", "khadija", "khadeeja", "asma", "hanan", "rasha",
-    "rola", "samira", "dalal", "bushra", "iman", "amal", "duaa", "israa", "marwa", "shaimaa",
-    "heba", "hager", "rawan", "shahad", "raghad", "hala", "ghada", "sahar", "manar", "naglaa",
-    # Asian & Hispanic
-    "sakura", "yuki", "mei", "lin", "xia", "yoko", "haruka", "aiko", "priya", "ananya", "deepa",
-    "pooja", "neha", "sneha", "kavita", "sunita", "lucia", "martina", "valeria", "paula", "daniela"
-}
-
-# Comprehensive Male First Names
-MALE_NAMES = {
-    # English & Western
-    "john", "james", "robert", "michael", "william", "david", "richard", "joseph", "thomas",
-    "charles", "christopher", "daniel", "matthew", "anthony", "mark", "donald", "steven", "paul",
-    "andrew", "joshua", "kenneth", "kevin", "brian", "george", "edward", "ronald", "timothy",
-    "jason", "jeffrey", "ryan", "jacob", "gary", "nicholas", "eric", "jonathan", "stephen",
-    "larry", "justin", "scott", "brandon", "benjamin", "samuel", "gregory", "frank", "alexander",
-    "raymond", "patrick", "jack", "dennis", "jerry", "tyler", "aaron", "jose", "adam", "nathan",
-    "henry", "douglas", "zachary", "peter", "kyle", "walter", "ethan", "jeremy", "harold", "keith",
-    "christian", "roger", "noah", "gerald", "carl", "terry", "sean", "austin", "arthur", "lawrence",
-    "jesse", "dylan", "bryan", "joe", "jordan", "billy", "albert", "bruce", "willie", "gabriel",
-    "logan", "lucas", "mason", "oliver", "liam", "elias", "julian", "leo", "theodore", "ezra",
-    # Arabic & Middle Eastern
-    "ahmad", "ahmed", "mohammed", "muhammad", "ali", "omar", "hussein", "hassan", "mustafa",
-    "ibrahim", "khalid", "youssef", "yousef", "tariq", "bilal", "zayd", "hamza", "karim", "amr",
-    "abdullah", "abdul", "saad", "tamer", "mahmoud", "fadi", "rami", "wail", "samer", "ziad",
-    "hisham", "yasin", "faisal", "nasser", "adel", "bassem", "osama", "waleed", "saleh", "marwan"
-}
-
-
-def detect_gender(name: str | None, bio: str | None, username: str) -> tuple[str, str]:
-    """
-    Detects profile gender based on pronouns, bio keywords, real name, and username.
-    Returns: (gender: "female" | "male" | "unknown", reason: str)
-    """
-    text = f"{name or ''} {bio or ''}".lower()
-
-    # 1. Highest Confidence: Declared Pronouns
-    for p in FEMALE_PRONOUNS:
-        if p in text:
-            return "female", f"pronouns '{p}'"
-
-    for p in MALE_PRONOUNS:
-        if p in text:
-            return "male", f"pronouns '{p}'"
-
-    # 2. Bio Keywords
-    for kw in FEMALE_BIO_KEYWORDS:
-        if kw in text:
-            return "female", f"bio '{kw}'"
-
-    for kw in MALE_BIO_KEYWORDS:
-        if kw in text:
-            return "male", f"bio '{kw}'"
-
-    # 3. Real Name First Name matching
-    if name:
-        clean_first = "".join(c for c in name.strip().split()[0].lower() if c.isalpha())
-        if clean_first in FEMALE_NAMES:
-            return "female", f"name '{clean_first.capitalize()}'"
-        if clean_first in MALE_NAMES:
-            return "male", f"name '{clean_first.capitalize()}'"
-
-    # 4. Username Prefix matching
-    uname_lower = username.lower()
-    for fn in FEMALE_NAMES:
-        if len(fn) >= 4 and uname_lower.startswith(fn):
-            return "female", f"username '{fn}'"
-
-    for mn in MALE_NAMES:
-        if len(mn) >= 4 and uname_lower.startswith(mn):
-            return "male", f"username '{mn}'"
-
-    return "unknown", "none"
 
 
 def format_duration(seconds: float) -> str:
@@ -171,7 +80,7 @@ def format_duration(seconds: float) -> str:
 
 
 def render_progress_bar(current: int, total: int, width: int = 20) -> str:
-    """Renders a sleek, modern progress bar with accurate percentage."""
+    """Renders a sleek Unicode progress bar with percentage."""
     if total <= 0:
         return f"[{'░' * width}] 0.0%"
     fraction = min(max(current / total, 0.0), 1.0)
@@ -179,16 +88,6 @@ def render_progress_bar(current: int, total: int, width: int = 20) -> str:
     bar = f"{GREEN}{'█' * filled}{DIM}{'░' * (width - filled)}{RESET}"
     percent = fraction * 100
     return f"[{bar}] {BOLD}{percent:5.1f}%{RESET}"
-
-
-def clean_input(raw: str) -> str:
-    """Cleans URLs, @ symbols, and trailing slashes into clean identifiers."""
-    val = raw.strip()
-    val = re.sub(r"^https?://(www\.)?github\.com/", "", val, flags=re.IGNORECASE)
-    val = val.lstrip("@").rstrip("/")
-    if val.endswith(".git"):
-        val = val[:-4]
-    return val.strip()
 
 
 def load_token_from_env_file() -> str | None:
@@ -221,7 +120,7 @@ def get_token() -> str:
 
 
 class CursorManager:
-    """Tracks the last scanned page per target so we never re-scan old pages."""
+    """Tracks the last scanned page per search vector to avoid re-scanning."""
     def __init__(self, path: Path):
         self.path = path
         self.cursors: dict[str, int] = {}
@@ -243,15 +142,15 @@ class CursorManager:
             pass
 
     def get_page(self, key: str) -> int:
-        return self.cursors.get(key.lower(), 1)
+        return self.cursors.get(key, 1)
 
     def set_page(self, key: str, page: int):
-        self.cursors[key.lower()] = page
+        self.cursors[key] = page
         self.save()
 
 
 class HistoryManager:
-    """Tracks users already processed in-memory and on disk to prevent duplicate API requests."""
+    """Tracks users already processed in-memory and on disk to prevent duplicates."""
     def __init__(self, path: Path):
         self.path = path
         self.history: set[str] = set()
@@ -282,12 +181,11 @@ class HistoryManager:
         return username.lower() in self.history
 
 
-class GitHubBot:
-    def __init__(self, token: str, dry_run: bool = False, delay: float = DEFAULT_DELAY, gender_filter: str = "all"):
+class KurdishBot:
+    def __init__(self, token: str, dry_run: bool = False, delay: float = DEFAULT_DELAY):
         self.token = token
         self.dry_run = dry_run
         self.delay = delay
-        self.gender_filter = gender_filter.lower()  # "all", "female" (girls), "male" (boys)
         self.session = requests.Session()
 
         # Connection pooling
@@ -299,7 +197,7 @@ class GitHubBot:
             "Accept": "application/vnd.github+json",
             "Authorization": f"Bearer {self.token}",
             "X-GitHub-Api-Version": "2022-11-28",
-            "User-Agent": "GitHub-Network-Expander/7.0",
+            "User-Agent": "Kurdish-Dev-Expander/1.0",
         })
         self.current_user = ""
         self.user_stats = {}
@@ -343,29 +241,6 @@ class GitHubBot:
         self.history.save()
         print(f" {GREEN}Done ({count} accounts cached, {len(self.history.history)} total in memory){RESET}\n")
 
-    def inspect_candidate(self, username: str) -> tuple[bool, str]:
-        """
-        Validates if username passes the gender filter.
-        Returns: (passes: bool, reason: str)
-        """
-        if self.gender_filter in ("all", "*"):
-            return True, "all"
-
-        # Fetch profile metadata for gender inspection
-        resp = self.session.get(f"{GITHUB_API_BASE}/users/{username}")
-        if resp.status_code != 200:
-            return False, "api_error"
-
-        user_data = resp.json()
-        gender, reason = detect_gender(user_data.get("name"), user_data.get("bio"), username)
-
-        if self.gender_filter in ("female", "girl", "girls", "f"):
-            return (gender == "female"), reason
-        elif self.gender_filter in ("male", "boy", "boys", "m"):
-            return (gender == "male"), reason
-
-        return True, "all"
-
     def follow(self, username: str) -> bool:
         """Sends PUT request to follow a GitHub user directly with auto-backoff."""
         if self.dry_run:
@@ -402,91 +277,37 @@ class GitHubBot:
 
         return False
 
-    def get_followers_of(self, target_user: str, count: int = BATCH_SIZE) -> list[tuple[str, str]]:
-        """Scans followers of a target, filtering by gender and previous follows."""
-        clean_user = clean_input(target_user)
+    def scan_kurdish_developers(self, goal: int = DAILY_BATCH_LIMIT) -> list[tuple[str, str]]:
+        """
+        Scans across all Kurdish locations and keywords to find 'goal' brand-new Kurdish developers.
+        Returns: list of (username, location_tag)
+        """
         candidates: list[tuple[str, str]] = []
-        page = self.cursors.get_page(f"followers_{clean_user}_{self.gender_filter}")
         per_page = 100
         scanned_total = 0
         skipped_total = 0
 
-        gender_desc = "GIRLS / FEMALE" if self.gender_filter in ("female", "girl", "girls") else (
-            "BOYS / MALE" if self.gender_filter in ("male", "boy", "boys") else "ALL"
-        )
+        print(f"{YELLOW}☀️ Scanning GitHub for {goal} BRAND NEW Kurdish Developers (Boys & Girls)...{RESET}")
 
-        print(f"{CYAN}🔍 Pre-scanning @{clean_user} for {count} BRAND NEW [{gender_desc}] accounts...{RESET}")
-
-        while len(candidates) < count:
-            url = f"{GITHUB_API_BASE}/users/{clean_user}/followers?per_page={per_page}&page={page}"
-            resp = self.session.get(url)
-            if resp.status_code != 200:
-                print(f"\n{RED}[!] Error fetching page {page} (HTTP {resp.status_code}){RESET}")
+        for query, label in KURDISH_SEARCH_VECTORS:
+            if len(candidates) >= goal:
                 break
 
-            items = resp.json()
-            if not items or not isinstance(items, list):
-                break
+            page = self.cursors.get_page(query)
+            max_pages_per_vector = 5  # Scan up to 5 pages per city/keyword per cycle
 
-            for item in items:
-                username = item["login"]
-                scanned_total += 1
+            while len(candidates) < goal and max_pages_per_vector > 0:
+                url = f"{GITHUB_API_BASE}/search/users?q={query}&per_page={per_page}&page={page}"
+                resp = self.session.get(url)
+                if resp.status_code != 200:
+                    break
 
-                if self.history.contains(username) or username.lower() == self.current_user.lower():
-                    skipped_total += 1
-                    continue
+                data = resp.json()
+                items = data.get("items", [])
+                if not items:
+                    break
 
-                passes, reason = self.inspect_candidate(username)
-                if passes:
-                    candidates.append((username, reason))
-                    if len(candidates) >= count:
-                        break
-                else:
-                    skipped_total += 1
-
-                sys.stdout.write(
-                    f"\r  {CYAN}→ Page {page}{RESET} │ "
-                    f"Scanned: {BOLD}{scanned_total}{RESET} │ "
-                    f"Filtered: {YELLOW}{skipped_total}{RESET} │ "
-                    f"Matched ({gender_desc}): {GREEN}{BOLD}{len(candidates)}/{count}{RESET} "
-                )
-                sys.stdout.flush()
-
-            page += 1
-            if len(items) < per_page:
-                break
-
-        self.cursors.set_page(f"followers_{clean_user}_{self.gender_filter}", max(1, page - 1))
-        print(f"\n{GREEN}✓ Scan completed! Ready with {len(candidates)} brand new matched accounts.{RESET}")
-        return candidates
-
-    def get_contributors_of(self, repo: str, count: int = BATCH_SIZE) -> list[tuple[str, str]]:
-        """Scans contributors of a repo, filtering by gender and previous follows."""
-        clean_repo = clean_input(repo)
-        candidates: list[tuple[str, str]] = []
-        page = self.cursors.get_page(f"contributors_{clean_repo}_{self.gender_filter}")
-        per_page = 100
-        scanned_total = 0
-        skipped_total = 0
-
-        gender_desc = "GIRLS / FEMALE" if self.gender_filter in ("female", "girl", "girls") else (
-            "BOYS / MALE" if self.gender_filter in ("male", "boy", "boys") else "ALL"
-        )
-
-        print(f"{CYAN}🔍 Pre-scanning {clean_repo} for {count} BRAND NEW [{gender_desc}] accounts...{RESET}")
-
-        while len(candidates) < count:
-            url = f"{GITHUB_API_BASE}/repos/{clean_repo}/contributors?per_page={per_page}&page={page}"
-            resp = self.session.get(url)
-            if resp.status_code != 200:
-                break
-
-            items = resp.json()
-            if not items or not isinstance(items, list):
-                break
-
-            for item in items:
-                if "login" in item:
+                for item in items:
                     username = item["login"]
                     scanned_total += 1
 
@@ -494,128 +315,60 @@ class GitHubBot:
                         skipped_total += 1
                         continue
 
-                    passes, reason = self.inspect_candidate(username)
-                    if passes:
-                        candidates.append((username, reason))
-                        if len(candidates) >= count:
-                            break
-                    else:
-                        skipped_total += 1
-
-                    sys.stdout.write(
-                        f"\r  {CYAN}→ Page {page}{RESET} │ "
-                        f"Scanned: {BOLD}{scanned_total}{RESET} │ "
-                        f"Filtered: {YELLOW}{skipped_total}{RESET} │ "
-                        f"Matched ({gender_desc}): {GREEN}{BOLD}{len(candidates)}/{count}{RESET} "
-                    )
-                    sys.stdout.flush()
-
-            page += 1
-            if len(items) < per_page:
-                break
-
-        self.cursors.set_page(f"contributors_{clean_repo}_{self.gender_filter}", max(1, page - 1))
-        print(f"\n{GREEN}✓ Scan completed! Ready with {len(candidates)} brand new matched accounts.{RESET}")
-        return candidates
-
-    def search_users(self, query: str, count: int = BATCH_SIZE) -> list[tuple[str, str]]:
-        """Scans GitHub search results, filtering by gender and previous follows."""
-        candidates: list[tuple[str, str]] = []
-        page = self.cursors.get_page(f"search_{query}_{self.gender_filter}")
-        per_page = 100
-        scanned_total = 0
-        skipped_total = 0
-
-        # Set display label for gender
-        effective_query = query
-        if self.gender_filter in ("female", "girl", "girls"):
-            gender_desc = "GIRLS / FEMALE"
-        elif self.gender_filter in ("male", "boy", "boys"):
-            gender_desc = "BOYS / MALE"
-        else:
-            gender_desc = "ALL"
-
-        print(f"{CYAN}🔍 Pre-scanning search '{effective_query}' for {count} BRAND NEW [{gender_desc}] accounts...{RESET}")
-
-        while len(candidates) < count:
-            url = f"{GITHUB_API_BASE}/search/users?q={effective_query}&per_page={per_page}&page={page}"
-            resp = self.session.get(url)
-            if resp.status_code != 200:
-                break
-
-            data = resp.json()
-            items = data.get("items", [])
-            if not items:
-                break
-
-            for item in items:
-                username = item["login"]
-                scanned_total += 1
-
-                if self.history.contains(username) or username.lower() == self.current_user.lower():
-                    skipped_total += 1
-                    continue
-
-                passes, reason = self.inspect_candidate(username)
-                if passes:
-                    candidates.append((username, reason))
-                    if len(candidates) >= count:
+                    candidates.append((username, label))
+                    if len(candidates) >= goal:
                         break
-                else:
-                    skipped_total += 1
 
                 sys.stdout.write(
-                    f"\r  {CYAN}→ Page {page}{RESET} │ "
+                    f"\r  {CYAN}📍 [{label}]{RESET} Page {page} │ "
                     f"Scanned: {BOLD}{scanned_total}{RESET} │ "
-                    f"Filtered: {YELLOW}{skipped_total}{RESET} │ "
-                    f"Matched ({gender_desc}): {GREEN}{BOLD}{len(candidates)}/{count}{RESET} "
+                    f"Already Followed: {YELLOW}{skipped_total}{RESET} │ "
+                    f"New Kurdish Devs Found: {GREEN}{BOLD}{len(candidates)}/{goal}{RESET} "
                 )
                 sys.stdout.flush()
 
-            page += 1
-            if len(items) < per_page:
-                break
+                page += 1
+                max_pages_per_vector -= 1
+                if len(items) < per_page:
+                    break
 
-        self.cursors.set_page(f"search_{query}_{self.gender_filter}", max(1, page - 1))
-        print(f"\n{GREEN}✓ Scan completed! Ready with {len(candidates)} brand new matched accounts.{RESET}")
+            self.cursors.set_page(query, page)
+
+        print(f"\n{GREEN}✓ Scan completed! Ready with {len(candidates)} brand-new Kurdish developers.{RESET}\n")
         return candidates
 
-    def print_batch_header(self, batch_num: int, target_label: str, goal: int):
-        """Displays a clean, styled dashboard card with gender filter badge."""
+    def print_dashboard(self, goal: int):
+        """Displays Kurdish themed header card."""
         est_seconds = goal * self.delay
         est_duration = format_duration(est_seconds)
         eta_time = time.strftime("%I:%M:%S %p", time.localtime(time.time() + est_seconds))
         speed_text = f"~{int(60 / max(self.delay, 0.1))} follows/min ({self.delay}s delay)"
         cur_following = self.user_stats.get("following", 0)
 
-        gender_badge = "👩 Girls Only" if self.gender_filter in ("female", "girl", "girls") else (
-            "👨 Boys Only" if self.gender_filter in ("male", "boy", "boys") else "🌟 All (Boys & Girls)"
-        )
-
         box_width = 62
-        print(f"\n{CYAN}╭{'─' * box_width}╮{RESET}")
-        title = f"⚡ BATCH #{batch_num} — GOAL: {goal} NEW FOLLOWS ⚡"
-        print(f"{CYAN}│{BOLD}{title:^{box_width}}{RESET}{CYAN}│{RESET}")
-        print(f"{CYAN}├{'─' * box_width}┤{RESET}")
-        print(f"{CYAN}│{RESET}  👤 {BOLD}Operator:{RESET}  @{self.current_user:<16}  👥 {BOLD}Followers:{RESET} {str(self.user_stats.get('followers', 0)):<15}{CYAN}│{RESET}")
-        print(f"{CYAN}│{RESET}  🎯 {BOLD}Source:{RESET}    {target_label:<16}  🔄 {BOLD}Following:{RESET} {str(cur_following):<15}{CYAN}│{RESET}")
-        print(f"{CYAN}│{RESET}  🏷️  {BOLD}Filter:{RESET}    {gender_badge:<16}  ⚡ {BOLD}Speed:{RESET}     {speed_text:<15}{CYAN}│{RESET}")
-        print(f"{CYAN}│{RESET}  ⏱️  {BOLD}Est Time:{RESET}  {est_duration:<16}  🏁 {BOLD}Batch ETA:{RESET} {eta_time:<15}{CYAN}│{RESET}")
-        print(f"{CYAN}╰{'─' * box_width}╯{RESET}\n")
+        print(f"{YELLOW}╭{'─' * box_width}╮{RESET}")
+        title = f"☀️ KURDISH DEVELOPER NETWORK EXPANDER ☀️"
+        print(f"{YELLOW}│{BOLD}{title:^{box_width}}{RESET}{YELLOW}│{RESET}")
+        print(f"{YELLOW}├{'─' * box_width}┤{RESET}")
+        print(f"{YELLOW}│{RESET}  👤 {BOLD}Operator:{RESET}  @{self.current_user:<16}  👥 {BOLD}Followers:{RESET} {str(self.user_stats.get('followers', 0)):<15}{YELLOW}│{RESET}")
+        print(f"{YELLOW}│{RESET}  📍 {BOLD}Target:{RESET}    Kurdish Devs      🔄 {BOLD}Following:{RESET} {str(cur_following):<15}{YELLOW}│{RESET}")
+        print(f"{YELLOW}│{RESET}  🎯 {BOLD}Daily Goal:{RESET}{str(goal) + ' Kurdish Devs':<16}  ⚡ {BOLD}Speed:{RESET}     {speed_text:<15}{YELLOW}│{RESET}")
+        print(f"{YELLOW}│{RESET}  ⏱️  {BOLD}Est Time:{RESET}  {est_duration:<16}  🏁 {BOLD}Batch ETA:{RESET} {eta_time:<15}{YELLOW}│{RESET}")
+        print(f"{YELLOW}╰{'─' * box_width}╯{RESET}\n")
 
-    def run_batch(self, targets: list[tuple[str, str]], goal: int, batch_num: int, target_label: str) -> tuple[int, float]:
-        """Executes a single batch with real-time percentage progress bar and timers."""
+    def run_batch(self, targets: list[tuple[str, str]], goal: int) -> tuple[int, float]:
+        """Executes following for the target list with real-time progress bar and location tags."""
         if not targets:
             print(f"{YELLOW}[!] No candidate accounts available.{RESET}")
             return 0, 0.0
 
-        self.print_batch_header(batch_num, target_label, goal)
+        self.print_dashboard(goal)
 
         success_count = 0
         start_time = time.time()
 
         try:
-            for idx, (username, reason) in enumerate(targets, 1):
+            for idx, (username, loc_tag) in enumerate(targets, 1):
                 if success_count >= goal:
                     break
 
@@ -634,14 +387,8 @@ class GitHubBot:
                     f"│ 🏁 ETA: {MAGENTA}{eta_clock}{RESET}"
                 )
 
-                gender_tag = ""
-                if self.gender_filter in ("female", "girl", "girls"):
-                    gender_tag = f" {MAGENTA}[👩 {reason}]{RESET}"
-                elif self.gender_filter in ("male", "boy", "boys"):
-                    gender_tag = f" {BLUE}[👨 {reason}]{RESET}"
-
                 print(status_header)
-                print(f"  → Following {BOLD}@{username}{RESET}{gender_tag}...", end="", flush=True)
+                print(f"  → Following {BOLD}@{username}{RESET} {YELLOW}[📍 {loc_tag}]{RESET}...", end="", flush=True)
 
                 if self.follow(username):
                     success_count += 1
@@ -658,202 +405,123 @@ class GitHubBot:
                     time.sleep(self.delay)
 
         except KeyboardInterrupt:
-            print(f"\n{YELLOW}⚠️  Batch paused by user (Ctrl+C).{RESET}")
+            print(f"\n{YELLOW}⚠️  Session paused by user (Ctrl+C).{RESET}")
 
         batch_elapsed = time.time() - start_time
         return success_count, batch_elapsed
 
 
-def ask_gender() -> str:
-    """Lets user select their preferred gender filter."""
-    print(f"\n👥 {BOLD}Select Profile Filter (Boy / Girl):{RESET}")
-    print(f"  1) {CYAN}🌟 All Profiles (Boys & Girls){RESET} [Default - Fastest]")
-    print(f"  2) {MAGENTA}👩 Girls / Female Only{RESET} (Scans pronouns, bio, name)")
-    print(f"  3) {BLUE}👨 Boys / Male Only{RESET}   (Scans pronouns, bio, name)")
+def record_daily_run(followed: int):
+    """Saves daily execution timestamp to prevent over-following."""
+    today = datetime.now().strftime("%Y-%m-%d")
+    data = {}
+    if DAILY_STATE_PATH.exists():
+        try:
+            with open(DAILY_STATE_PATH, "r") as f:
+                data = json.load(f)
+        except Exception:
+            data = {}
 
-    choice = input("\nEnter choice [1-3, default 1]: ").strip()
-    if choice == "2":
-        return "female"
-    elif choice == "3":
-        return "male"
-    return "all"
+    runs = data.get("runs", {})
+    runs[today] = runs.get(today, 0) + followed
+    data["runs"] = runs
+    data["last_run"] = datetime.now().isoformat()
 
-
-def ask_speed() -> float:
-    """Lets user select speed mode."""
-    print(f"\n⚡ {BOLD}Select Speed Mode:{RESET}")
-    print(f"  1) {CYAN}🚀 Turbo{RESET} (0.5s delay - ~120 follows/min) [Recommended]")
-    print(f"  2) {GREEN}⚡ Fast{RESET}  (1.0s delay - ~60 follows/min)")
-    print(f"  3) {YELLOW}🛡️ Safe{RESET}  (2.0s delay - ~30 follows/min)")
-
-    choice = input("   Enter choice [1-3, default 1]: ").strip()
-    if choice == "2":
-        return 1.0
-    elif choice == "3":
-        return 2.0
-    return 0.5
+    try:
+        with open(DAILY_STATE_PATH, "w") as f:
+            json.dump(data, f, indent=2)
+    except Exception:
+        pass
 
 
-def run_continuous_session(bot: GitHubBot, mode: str, target_val: str, batch_size: int = BATCH_SIZE):
-    """Loops in batches of 250: pre-scans to ensure only fresh accounts, then asks to continue."""
-    batch_num = 1
-    total_session_followed = 0
-    total_session_time = 0.0
+def execute_daily_batch(bot: KurdishBot, goal: int = DAILY_BATCH_LIMIT) -> int:
+    """Finds and follows a single daily batch of 250 Kurdish developers."""
+    candidates = bot.scan_kurdish_developers(goal=goal)
+    if not candidates:
+        print(f"{YELLOW}[!] No more fresh Kurdish developers found today. Try again tomorrow!{RESET}")
+        return 0
 
-    target_label = f"@{target_val}" if mode == "user" else target_val
+    followed, elapsed = bot.run_batch(candidates, goal=goal)
+    record_daily_run(followed)
+
+    bot.refresh_user_stats()
+    current_following = bot.user_stats.get("following", 0)
+
+    # Completion Card
+    box_width = 62
+    print(f"\n{GREEN}╭{'─' * box_width}╮{RESET}")
+    title = f"☀️ TODAY'S BATCH COMPLETED ({followed}/{goal} NEW KURDISH DEVS) ☀️"
+    print(f"{GREEN}│{BOLD}{title:^{box_width}}{RESET}{GREEN}│{RESET}")
+    print(f"{GREEN}├{'─' * box_width}┤{RESET}")
+    print(f"{GREEN}│{RESET}  ✓ {BOLD}Kurdish Devs Followed Today:{RESET} {followed} accounts{' ' * (box_width - len(str(followed)) - 37)}{GREEN}│{RESET}")
+    print(f"{GREEN}│{RESET}  🔄 {BOLD}Current Total Following:{RESET}     {current_following} accounts{' ' * (box_width - len(str(current_following)) - 32)}{GREEN}│{RESET}")
+    print(f"{GREEN}│{RESET}  ⏱️  {BOLD}Time Elapsed:{RESET}                 {format_duration(elapsed)}{' ' * (box_width - len(format_duration(elapsed)) - 24)}{GREEN}│{RESET}")
+    print(f"{GREEN}│{RESET}  💾 {BOLD}Saved To:{RESET}                     followed_history.json{' ' * (box_width - 45)}{GREEN}│{RESET}")
+    print(f"{GREEN}╰{'─' * box_width}╯{RESET}\n")
+
+    return followed
+
+
+def run_daemon_mode(bot: KurdishBot, goal: int = DAILY_BATCH_LIMIT):
+    """Automatic daily background loop: runs 250 follows, sleeps 24 hours, and repeats."""
+    print(f"\n{YELLOW}{BOLD}☀️ AUTOMATIC DAILY MODE ACTIVATED ☀️{RESET}")
+    print(f"The tool will follow {goal} Kurdish developers every 24 hours automatically.")
+    print(f"Press {RED}Ctrl+C{RESET} at any time to stop.\n")
 
     while True:
-        if mode == "user":
-            candidates = bot.get_followers_of(target_val, count=batch_size)
-        elif mode == "search":
-            candidates = bot.search_users(target_val, count=batch_size)
-        elif mode == "repo":
-            candidates = bot.get_contributors_of(target_val, count=batch_size)
-        else:
-            raw_list = [clean_input(u) for u in target_val.split(",") if clean_input(u)]
-            candidates = []
-            for u in raw_list:
-                if not bot.history.contains(u):
-                    passes, reason = bot.inspect_candidate(u)
-                    if passes:
-                        candidates.append((u, reason))
+        execute_daily_batch(bot, goal=goal)
 
-        if not candidates:
-            print(f"\n{YELLOW}[!] No more fresh matched accounts found from {target_label}.{RESET}")
+        sleep_hours = 24
+        sleep_seconds = sleep_hours * 3600
+        wake_time = time.strftime("%I:%M:%S %p tomorrow", time.localtime(time.time() + sleep_seconds))
+
+        print(f"{CYAN}💤 Sleeping for 24 hours until next daily run... (Next run at: {wake_time}){RESET}")
+        try:
+            time.sleep(sleep_seconds)
+        except KeyboardInterrupt:
+            print(f"\n{YELLOW}[!] Daily mode stopped by user.{RESET}")
             break
-
-        followed, elapsed = bot.run_batch(candidates, goal=batch_size, batch_num=batch_num, target_label=target_label)
-        total_session_followed += followed
-        total_session_time += elapsed
-
-        # Refresh stats from GitHub
-        bot.refresh_user_stats()
-        current_following = bot.user_stats.get("following", 0)
-
-        # Batch Completion Card
-        box_width = 62
-        print(f"\n{GREEN}╭{'─' * box_width}╮{RESET}")
-        title = f"🎉 BATCH #{batch_num} COMPLETED ({followed}/{batch_size} NEW) 🎉"
-        print(f"{GREEN}│{BOLD}{title:^{box_width}}{RESET}{GREEN}│{RESET}")
-        print(f"{GREEN}├{'─' * box_width}┤{RESET}")
-        print(f"{GREEN}│{RESET}  ✓ {BOLD}New Follows in Batch #{batch_num}:{RESET} {followed} accounts{' ' * (box_width - len(str(followed)) - 35)}{GREEN}│{RESET}")
-        print(f"{GREEN}│{RESET}  🌟 {BOLD}Total in This Session:{RESET}     {total_session_followed} accounts{' ' * (box_width - len(str(total_session_followed)) - 32)}{GREEN}│{RESET}")
-        print(f"{GREEN}│{RESET}  🔄 {BOLD}Current Total Following:{RESET}   {current_following} accounts{' ' * (box_width - len(str(current_following)) - 32)}{GREEN}│{RESET}")
-        print(f"{GREEN}│{RESET}  ⏱️  {BOLD}Batch Time Elapsed:{RESET}       {format_duration(elapsed)}{' ' * (box_width - len(format_duration(elapsed)) - 32)}{GREEN}│{RESET}")
-        print(f"{GREEN}╰{'─' * box_width}╯{RESET}\n")
-
-        print(f"{BOLD}What would you like to do next?{RESET}")
-        print(f"  {CYAN}{BOLD}1) 🚀 Start following NEXT {batch_size} accounts{RESET} [Press Enter]")
-        print(f"  {YELLOW}2) 🛑 Stop and exit session{RESET}")
-
-        ans = input(f"\nEnter choice [1/2, default 1]: ").strip()
-        if ans == "2":
-            break
-
-        batch_num += 1
-
-    # Grand Session Summary
-    box_width = 62
-    avg_speed = (total_session_followed / total_session_time * 60) if total_session_time > 0 else 0
-    print(f"\n{CYAN}╭{'─' * box_width}╮{RESET}")
-    print(f"{CYAN}│{BOLD}{'🏆 FINAL SESSION SUMMARY':^{box_width}}{RESET}{CYAN}│{RESET}")
-    print(f"{CYAN}├{'─' * box_width}┤{RESET}")
-    print(f"{CYAN}│{RESET}  ✓ {BOLD}Total New Accounts Followed:{RESET} {total_session_followed} accounts{' ' * (box_width - len(str(total_session_followed)) - 37)}{CYAN}│{RESET}")
-    print(f"{CYAN}│{RESET}  ⏱️  {BOLD}Total Time Elapsed:{RESET}          {format_duration(total_session_time)}{' ' * (box_width - len(format_duration(total_session_time)) - 33)}{CYAN}│{RESET}")
-    print(f"{CYAN}│{RESET}  ⚡ {BOLD}Average Speed:{RESET}               {avg_speed:.1f} follows/min{' ' * (box_width - len(f'{avg_speed:.1f}') - 33)}{CYAN}│{RESET}")
-    print(f"{CYAN}│{RESET}  💾 {BOLD}History Stored In:{RESET}           followed_history.json{' ' * (box_width - 43)}{CYAN}│{RESET}")
-    print(f"{CYAN}╰{'─' * box_width}╯{RESET}\n")
-
-
-def run_interactive(bot: GitHubBot):
-    print(f"{BOLD}Choose Target Source:{RESET}")
-    print("  1) Follow followers of a company or organization (e.g. google, microsoft, meta)")
-    print("  2) Search active developers by keywords (e.g. location:Iraq, language:python)")
-    print("  3) Follow contributors of a repository (e.g. facebook/react, flutter/flutter)")
-    print("  4) Enter specific usernames manually")
-    print("  5) Exit")
-
-    choice = input("\nEnter choice [1-5]: ").strip()
-
-    if choice == "1":
-        target = input("\nEnter company or user account (e.g. google, microsoft): ").strip()
-        cleaned = clean_input(target)
-        bot.gender_filter = ask_gender()
-        bot.delay = ask_speed()
-        run_continuous_session(bot, mode="user", target_val=cleaned, batch_size=BATCH_SIZE)
-
-    elif choice == "2":
-        query = input("\nEnter search keywords (e.g. location:Iraq language:python): ").strip()
-        bot.gender_filter = ask_gender()
-        bot.delay = ask_speed()
-        run_continuous_session(bot, mode="search", target_val=query, batch_size=BATCH_SIZE)
-
-    elif choice == "3":
-        raw_repo = input("\nEnter repository (e.g. facebook/react): ").strip()
-        cleaned_repo = clean_input(raw_repo)
-        if "/" not in cleaned_repo:
-            print(f"\n{YELLOW}[!] '{cleaned_repo}' is an account/organization, not a repository.{RESET}")
-            print(f"    {GREEN}Switching automatically to following followers of @{cleaned_repo}!{RESET}")
-            mode = "user"
-            target_val = cleaned_repo
-        else:
-            mode = "repo"
-            target_val = cleaned_repo
-
-        bot.gender_filter = ask_gender()
-        bot.delay = ask_speed()
-        run_continuous_session(bot, mode=mode, target_val=target_val, batch_size=BATCH_SIZE)
-
-    elif choice == "4":
-        raw = input("\nEnter usernames (separated by commas): ").strip()
-        bot.gender_filter = ask_gender()
-        bot.delay = ask_speed()
-        run_continuous_session(bot, mode="list", target_val=raw, batch_size=BATCH_SIZE)
-
-    else:
-        print("Exited.")
 
 
 def main():
-    parser = argparse.ArgumentParser(description="GitHub Network Expander Pro (With Gender Detection)")
-    parser.add_argument("--user", help="Target company or user account (e.g. 'google', 'microsoft')")
-    parser.add_argument("--search", help="Search query (e.g. 'location:Iraq')")
-    parser.add_argument("--repo", help="Target repository (e.g. 'facebook/react') to follow contributors")
-    parser.add_argument("--list", help="Comma-separated list of usernames")
-    parser.add_argument("--limit", type=int, default=BATCH_SIZE, help=f"Batch size (default: {BATCH_SIZE})")
+    parser = argparse.ArgumentParser(description="☀️ Kurdish Developer Auto-Follow Pro")
+    parser.add_argument("--limit", type=int, default=DAILY_BATCH_LIMIT, help=f"Daily batch goal (default: {DAILY_BATCH_LIMIT})")
     parser.add_argument("--delay", type=float, default=DEFAULT_DELAY, help=f"Seconds between follows (default: {DEFAULT_DELAY})")
-    parser.add_argument("--gender", default="all", choices=["all", "female", "girl", "male", "boy"], help="Filter by gender (female/girl, male/boy, all)")
-    parser.add_argument("--turbo", action="store_true", help="Run at max speed (0.5s delay)")
+    parser.add_argument("--daily", action="store_true", help="Automatic daily daemon mode (runs 250 follows every 24 hours)")
     parser.add_argument("--dry-run", action="store_true", help="Simulate without making actual follow requests")
 
     args = parser.parse_args()
 
-    delay = 0.5 if args.turbo else args.delay
-
     token = get_token()
-    bot = GitHubBot(token, dry_run=args.dry_run, delay=delay, gender_filter=args.gender)
+    bot = KurdishBot(token, dry_run=args.dry_run, delay=args.delay)
 
     user_info = bot.verify_account()
     if not user_info:
         print(f"{RED}[!] Authentication failed. Check your token in {ENV_PATH}.{RESET}")
         sys.exit(1)
 
-    # Sync following list into memory
+    print(f"{GREEN}{BOLD}✓ Authenticated as @{user_info.get('login')}{RESET}")
+    print(f"  Followers: {user_info.get('followers')} | Following: {user_info.get('following')}\n")
+
+    # Sync following list
     bot.preload_current_following()
 
-    if args.user:
-        run_continuous_session(bot, mode="user", target_val=clean_input(args.user), batch_size=args.limit)
-    elif args.search:
-        run_continuous_session(bot, mode="search", target_val=args.search, batch_size=args.limit)
-    elif args.repo:
-        cleaned_repo = clean_input(args.repo)
-        if "/" not in cleaned_repo:
-            cleaned_repo = f"{cleaned_repo}/{cleaned_repo}"
-        run_continuous_session(bot, mode="repo", target_val=cleaned_repo, batch_size=args.limit)
-    elif args.list:
-        run_continuous_session(bot, mode="list", target_val=args.list, batch_size=args.limit)
+    if args.daily:
+        run_daemon_mode(bot, goal=args.limit)
     else:
-        run_interactive(bot)
+        # Default simple interactive choice
+        print(f"{BOLD}Choose Operation Mode:{RESET}")
+        print(f"  {CYAN}1) ☀️ Run Today's Batch (Follow {args.limit} Kurdish Developers Now){RESET} [Default - Press Enter]")
+        print(f"  {YELLOW}2) 🔄 Start Automatic Daily Daemon (Follows {args.limit} every 24 hours continuously){RESET}")
+        print(f"  3) 🛑 Exit")
+
+        choice = input("\nEnter choice [1-3, default 1]: ").strip()
+        if choice == "2":
+            run_daemon_mode(bot, goal=args.limit)
+        elif choice == "3":
+            print("Exited.")
+        else:
+            execute_daily_batch(bot, goal=args.limit)
 
 
 if __name__ == "__main__":
