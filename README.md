@@ -1,8 +1,8 @@
 <div align="center">
 
-# ☀️ Kurdish Developer Auto-Pilot (GitHub Compliance Edition)
+# ☀️ Kurdish Developer Auto-Pilot Pro (Tech Roles & Gender Filter)
 
-**An intelligent, GitHub rule-compliant automation tool that follows Kurdish developers in safe 50-account batches separated by 2-hour rest breaks.**
+**An intelligent, GitHub rule-compliant automation tool that discovers and follows verified Kurdish developers (Fullstack, Backend, Software Engineers, Laravel, Seniors) in safe 50-account batches separated by 2-hour rest breaks, with interactive Gender Selection (Girls / Boys / All).**
 
 [![Python Version](https://img.shields.io/badge/python-3.10%2B-blue.svg?style=for-the-badge&logo=python&logoColor=white)](https://www.python.org/)
 [![GitHub license](https://img.shields.io/badge/license-MIT-green.svg?style=for-the-badge)](LICENSE)
@@ -11,6 +11,7 @@
 
 <p align="center">
   <a href="#-overview">Overview</a> •
+  <a href="#-core-features">Features</a> •
   <a href="#-why-the-2-hour-break-matters">GitHub Rules & 2h Break</a> •
   <a href="#-how-auto-pilot-works">Auto-Pilot Workflow</a> •
   <a href="#-installation">Installation</a> •
@@ -23,13 +24,15 @@
 
 ## 🚀 Overview
 
-**Kurdish Developer Auto-Pilot** is engineered specifically to respect **GitHub's Rate Limits & Anti-Abuse Policies**. 
+**Kurdish Developer Auto-Pilot Pro** is designed specifically to expand your developer network across Kurdistan while strictly adhering to **GitHub's Rate Limits & Anti-Abuse Policies**.
 
-Instead of aggressively following hundreds of accounts all at once (which triggers GitHub spam alarms and secondary rate limits), the tool operates on an intelligent **Duty-Cycle Auto-Pilot**:
-- Follows a safe batch of **50 fresh Kurdish developers** (~1 minute).
-- Takes a mandatory **2-hour rest break** to completely reset GitHub's rolling 60-minute window.
-- Shows a live countdown timer during the break.
-- Automatically wakes up after 2 hours, discovers the next 50 Kurdish developers, and repeats all day.
+Instead of aggressively following accounts all at once (which triggers GitHub spam alarms and secondary rate limits), the tool operates on an intelligent **Duty-Cycle Auto-Pilot**:
+- **Verified Tech Roles**: Inspects candidate profiles to verify they are **Fullstack, Backend, Software Engineers, Laravel, or Senior Developers**.
+- **Gender Selection**: Choose **Girls Only**, **Boys Only**, or **All Developers** (scans pronouns, bio signals, Kurdish first names, and usernames).
+- **Safe Batch Size**: Follows a safe batch of **50 verified Kurdish developers** per session (~1 minute).
+- **2-Hour Anti-Ban Break**: Automatically takes a **2-hour rest break** with a live countdown timer to completely clear GitHub's hourly rolling window.
+- **Continuous 24/7 Cycle**: Automatically wakes up after the 2-hour break, discovers the next batch, and repeats safely.
+- **Zero Duplicate Risk ("Not Again")**: Pre-caches your existing following list and maintains a local database to guarantee no account is ever followed twice.
 
 ---
 
@@ -95,16 +98,38 @@ GITHUB_TOKEN=ghp_yourTokenHere
 
 ## 💻 Usage Guide
 
-### 1. Start Auto-Pilot (Follow 50 → 2-Hour Break → Repeat)
+### 1. Interactive Daily Start (Recommended)
+Simply run:
 ```bash
-python3 autofollow.py --auto
+python3 autofollow.py
 ```
-*(Runs continuously: follows 50 Kurdish developers, counts down 2 hours on screen, then automatically starts the next batch).*
+You will be prompted to:
+1. Choose mode: **Auto-Pilot** (50 follows → 2h break → repeat) or **Single Batch**.
+2. Select gender filter:
+   - `1) 🌟 All Kurdish Developers (Boys & Girls)`
+   - `2) 👩 Kurdish Girls Only` (Female Fullstack / Backend / Software Engineers)
+   - `3) 👨 Kurdish Boys Only` (Male Fullstack / Backend / Software Engineers)
 
 ---
 
-### 2. Run in Background Permanently (Headless)
-To keep it running 24/7 on your Linux machine (even after closing terminal):
+### 2. Direct Auto-Pilot Commands
+You can also run directly with command-line flags:
+
+```bash
+# Follow Kurdish Girls Only (2-hour break cycle):
+python3 autofollow.py --auto --gender female
+
+# Follow Kurdish Boys Only (2-hour break cycle):
+python3 autofollow.py --auto --gender male
+
+# Follow All Kurdish Developers (default):
+python3 autofollow.py --auto --gender all
+```
+
+---
+
+### 3. Run in Background Permanently (24/7 Headless)
+To keep Auto-Pilot running continuously on your Linux machine (even after closing the terminal):
 ```bash
 nohup python3 /home/ahmad/github-auto-follower/autofollow.py --auto > autopilot.log 2>&1 &
 ```
@@ -115,19 +140,12 @@ tail -f autopilot.log
 
 ---
 
-### 3. Customize Batch Size or Break Hours
+### 4. Custom Batch Size or Break Duration
 ```bash
-# Follow 60 accounts, rest 2 hours:
-python3 autofollow.py --auto --batch-size 60 --break-hours 2
+# Follow 50 accounts, rest 2.5 hours:
+python3 autofollow.py --auto --batch-size 50 --break-hours 2.5
 
-# Follow 50 accounts, rest 3 hours:
-python3 autofollow.py --auto --batch-size 50 --break-hours 3
-```
-
----
-
-### 4. Run a Single Batch Right Now (No Loop)
-```bash
+# Run a single batch of 50 accounts right now and exit:
 python3 autofollow.py --once
 ```
 

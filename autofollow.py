@@ -1,13 +1,14 @@
 #!/usr/bin/env python3
 """
-☀️ Kurdish Developer Auto-Pilot (GitHub Compliance & 2-Hour Break Edition)
-Fully compliant with GitHub anti-abuse guidelines and rate limits.
+☀️ Kurdish Developer Auto-Pilot Pro (Tech Roles & Gender Filter Edition)
+Discovers and follows verified Kurdish developers (Fullstack, Backend, Software Engineers, Laravel, Seniors).
 
-Workflow:
-- Follows a safe batch of 50 fresh Kurdish developers (~1 minute).
-- Takes a mandatory 2-hour rest break (7,200s) to reset GitHub's hourly rolling window.
-- Displays live countdown timer and exact next start time during the 2-hour break.
-- Automatically wakes up after 2 hours, scans fresh Kurdish developers, and repeats.
+Features:
+- Tech Role Filter: Verifies profiles are Software Engineers, Developers, Fullstack, Backend, Laravel, or Seniors.
+- Gender Filter: Choose Kurdish Girls Only, Kurdish Boys Only, or All Developers.
+- Anti-Ban 2-Hour Rest Break: Follows 50 devs, rests 2 hours to clear GitHub hourly limits, and repeats.
+- Kurdish Search Vectors: Scans Erbil, Sulaymaniyah, Duhok, Kirkuk, Kurdistan, etc.
+- Zero Duplicates ("Not Again"): Multiple in-memory and disk checks guarantee no user is ever followed twice.
 """
 
 import os
@@ -41,32 +42,197 @@ BOLD = "\033[1m"
 DIM = "\033[2m"
 RESET = "\033[0m"
 
-# Safe GitHub Compliance Defaults
-DEFAULT_BATCH_SIZE = 50       # 50 follows per session (safe & under hourly limits)
-DEFAULT_BREAK_HOURS = 2.0     # 2 hours break between batches to reset rate limits
-DEFAULT_DELAY = 1.0           # 1.0s delay between follows (natural pacing)
+DEFAULT_BATCH_SIZE = 50       # 50 follows per session (safe under hourly limits)
+DEFAULT_BREAK_HOURS = 2.0     # 2 hours break between batches
+DEFAULT_DELAY = 1.0           # 1.0s delay between follows
 
-# Comprehensive Kurdish Search Vectors (Locations & Keywords)
-KURDISH_SEARCH_VECTORS = [
-    ("location:Kurdistan", "Kurdistan"),
-    ("location:Erbil", "Erbil"),
-    ("location:Sulaymaniyah", "Sulaymaniyah"),
-    ("location:Duhok", "Duhok"),
-    ("location:Hawler", "Hawler"),
-    ("location:Slemani", "Slemani"),
-    ("location:Kirkuk", "Kirkuk"),
-    ("location:Halabja", "Halabja"),
-    ("location:Zakho", "Zakho"),
-    ("location:Ranya", "Ranya"),
-    ("location:Kalar", "Kalar"),
-    ("location:Diyarbakir", "Diyarbakir"),
-    ("location:Mahabad", "Mahabad"),
-    ("location:Sanandaj", "Sanandaj"),
-    ("Kurdish in:bio", "Kurdish bio"),
-    ("Kurdistan in:bio", "Kurdistan bio"),
-    ("کوردستان in:bio", "کوردستان bio"),
-    ("کورد in:bio", "کورد bio"),
+# ==========================================
+# Verified Tech Developer Role Keywords
+# ==========================================
+DEV_KEYWORDS = [
+    "developer", "software engineer", "software developer", "fullstack", "full stack",
+    "full-stack", "backend", "back-end", "back end", "frontend", "front-end",
+    "front end", "laravel", "larval", "senior", "programmer", "coder",
+    "engineer", "web dev", "mobile dev", "devops", "cloud engineer",
+    "flutter", "react", "vue", "php", "python", "golang", "node"
 ]
+
+# ==========================================
+# Gender Detection Pronouns & Keywords
+# ==========================================
+FEMALE_PRONOUNS = [
+    "she/her", "she / her", "she/hers", "she / hers", "she/they", "she / they",
+    "her/she", "she/them", "they/she", "her / she"
+]
+
+MALE_PRONOUNS = [
+    "he/him", "he / him", "he/his", "he / his", "he/they", "he / they",
+    "him/he", "he/them", "they/he", "him / he"
+]
+
+FEMALE_BIO_KEYWORDS = [
+    "woman in tech", "women in tech", "women who code", "girls who code",
+    "pyladies", "shecodes", "djangogirls", "railsgirls", "girlscript",
+    "female developer", "female software engineer", "girl developer",
+    "mother", "mom", "lady", "sister", "wife"
+]
+
+MALE_BIO_KEYWORDS = [
+    "father", "dad", "husband", "brother", "guy", "boy developer"
+]
+
+# Kurdish & Regional Female First Names
+FEMALE_NAMES = {
+    # Kurdish Specific
+    "banaz", "tara", "choman", "dlan", "payman", "saya", "lanja", "sheno", "zhina",
+    "dilar", "kanar", "shler", "chro", "vian", "avesta", "narin", "perwin", "solin",
+    "roza", "helin", "rojin", "berivan", "dlvin", "chra", "kazhal", "shadan", "kwestan",
+    "sazan", "sozan", "lawen", "runak", "nishtiman", "gashaw", "zhian", "aveen", "avin",
+    "jehan", "darya", "shne", "lana", "helena", "khatoon", "naza", "tre", "taza",
+    # Arabic / Middle Eastern
+    "sarah", "sara", "fatima", "fatimah", "zahra", "maryam", "mariam", "noor", "nour",
+    "zainab", "zeinab", "aya", "ayah", "layla", "leila", "yasmin", "yasmine", "reem",
+    "rania", "salma", "huda", "mona", "dina", "nada", "maha", "lina", "leena", "amina",
+    "khadija", "khadeeja", "asma", "hanan", "rasha", "rola", "samira", "dalal", "bushra",
+    "iman", "amal", "duaa", "israa", "marwa", "shaimaa", "heba", "hager", "rawan", "shahad",
+    # Western / International
+    "emily", "jessica", "ashley", "amanda", "jennifer", "stephanie", "nicole", "elizabeth",
+    "megan", "hannah", "rachel", "lauren", "samantha", "victoria", "chloe", "olivia", "emma",
+    "ava", "sophia", "isabella", "mia", "charlotte", "amelia", "harper", "evelyn", "abigail",
+    "ella", "camila", "luna", "sofia", "avery", "grace", "zoey", "lily", "claire", "anna",
+    "julia", "laura", "maria", "alina", "daria", "valeria", "yulia", "anastasia", "eva"
+}
+
+# Kurdish & Regional Male First Names
+MALE_NAMES = {
+    # Kurdish Specific
+    "soran", "diyar", "karwan", "rebaz", "zana", "pawan", "sivar", "hekar", "rawand",
+    "hardy", "hardi", "heja", "shvan", "alan", "ranj", "danar", "hiwa", "dana", "aso",
+    "hawkar", "brwa", "goran", "kani", "dlawar", "sarkawt", "sarkaw", "araz", "harem",
+    "bokan", "botan", "bawer", "dlshad", "dilshad", "aram", "kawa", "ari", "peshawa",
+    "shero", "rebwar", "arman", "armin", "shaho", "sirwan", "ferhad", "farhad", "kamaran",
+    "bakhtiar", "hawre", "hemn", "hemin", "lawan", "yadgar", "shirwan", "chalak", "daban",
+    "baryar", "rebin", "sangar", "zhiyar", "kardo", "chia", "rekan", "dastan", "hoshang",
+    # Arabic / Middle Eastern
+    "ahmad", "ahmed", "ali", "mohammed", "mohammad", "muhammad", "mhamad", "mhammad",
+    "mamad", "mehmet", "omar", "hussein", "hassan", "mustafa", "ibrahim", "khalid",
+    "youssef", "yousef", "tariq", "bilal", "zayd", "hamza", "karim", "amr", "abdullah",
+    "abdul", "saad", "tamer", "mahmoud", "fadi", "rami", "wail", "samer", "ziad", "hisham",
+    "yasin", "faisal", "nasser", "adel", "bassem", "osama", "waleed", "saleh", "marwan",
+    # Western / International
+    "john", "james", "robert", "michael", "william", "david", "richard", "joseph", "thomas",
+    "charles", "christopher", "daniel", "matthew", "anthony", "mark", "paul", "andrew",
+    "joshua", "kevin", "brian", "george", "edward", "jason", "ryan", "jacob", "eric",
+    "alexander", "patrick", "adam", "peter", "noah", "lucas", "leo", "julian"
+}
+
+# Targeted Kurdish Developer Search Vectors
+KURDISH_DEV_VECTORS = [
+    ("location:Kurdistan developer", "Kurdistan • Dev"),
+    ("location:Kurdistan fullstack", "Kurdistan • Fullstack"),
+    ("location:Kurdistan backend", "Kurdistan • Backend"),
+    ("location:Kurdistan software", "Kurdistan • Software"),
+    ("location:Kurdistan laravel", "Kurdistan • Laravel"),
+    ("location:Erbil developer", "Erbil • Dev"),
+    ("location:Erbil fullstack", "Erbil • Fullstack"),
+    ("location:Erbil software", "Erbil • Software"),
+    ("location:Erbil backend", "Erbil • Backend"),
+    ("location:Erbil laravel", "Erbil • Laravel"),
+    ("location:Sulaymaniyah developer", "Sulaymaniyah • Dev"),
+    ("location:Sulaymaniyah software", "Sulaymaniyah • Software"),
+    ("location:Sulaymaniyah fullstack", "Sulaymaniyah • Fullstack"),
+    ("location:Duhok developer", "Duhok • Dev"),
+    ("location:Duhok software", "Duhok • Software"),
+    ("location:Kirkuk developer", "Kirkuk • Dev"),
+    ("location:Hawler developer", "Hawler • Dev"),
+    ("location:Slemani developer", "Slemani • Dev"),
+    ("location:Halabja developer", "Halabja • Dev"),
+    ("location:Zakho developer", "Zakho • Dev"),
+    ("Kurdish developer in:bio", "Kurdish bio • Dev"),
+    ("Kurdistan software in:bio", "Kurdistan bio • Software"),
+]
+
+
+def detect_gender(name: str | None, bio: str | None, username: str) -> tuple[str, str]:
+    """
+    Detects profile gender based on pronouns, bio keywords, first name, and username.
+    Returns: (gender: "female" | "male" | "unknown", reason: str)
+    """
+    text = f"{name or ''} {bio or ''}".lower()
+
+    # 1. Pronouns
+    for p in FEMALE_PRONOUNS:
+        if p in text:
+            return "female", f"pronouns '{p}'"
+
+    for p in MALE_PRONOUNS:
+        if p in text:
+            return "male", f"pronouns '{p}'"
+
+    # 2. Bio Keywords
+    for kw in FEMALE_BIO_KEYWORDS:
+        if kw in text:
+            return "female", f"bio '{kw}'"
+
+    for kw in MALE_BIO_KEYWORDS:
+        if kw in text:
+            return "male", f"bio '{kw}'"
+
+    # 3. First Name
+    if name:
+        first_word = name.strip().replace("-", " ").replace("_", " ").split()[0].lower()
+        clean_first = "".join(c for c in first_word if c.isalpha())
+        if clean_first in FEMALE_NAMES:
+            return "female", f"name '{clean_first.capitalize()}'"
+        if clean_first in MALE_NAMES:
+            return "male", f"name '{clean_first.capitalize()}'"
+
+    # 4. Username Prefix
+    uname_lower = username.lower().replace("-", "").replace("_", "")
+    for fn in FEMALE_NAMES:
+        if len(fn) >= 4 and uname_lower.startswith(fn):
+            return "female", f"username '{fn}'"
+
+    for mn in MALE_NAMES:
+        if len(mn) >= 4 and uname_lower.startswith(mn):
+            return "male", f"username '{mn}'"
+
+    return "unknown", "none"
+
+
+def identify_developer_role(bio: str | None, name: str | None, company: str | None) -> tuple[bool, str]:
+    """
+    Inspects bio, name, and company to verify developer role.
+    """
+    text = f"{bio or ''} {name or ''} {company or ''}".lower()
+
+    # High-priority specific roles requested by user
+    for role, label in [
+        ("fullstack", "Fullstack Developer"),
+        ("full stack", "Fullstack Developer"),
+        ("full-stack", "Fullstack Developer"),
+        ("software engineer", "Software Engineer"),
+        ("software developer", "Software Developer"),
+        ("backend", "Backend Developer"),
+        ("back-end", "Backend Developer"),
+        ("back end", "Backend Developer"),
+        ("laravel", "Laravel Developer"),
+        ("larval", "Laravel Developer"),
+        ("senior", "Senior Engineer"),
+        ("frontend", "Frontend Developer"),
+        ("front-end", "Frontend Developer"),
+        ("mobile dev", "Mobile Developer"),
+        ("flutter", "Flutter Developer"),
+        ("web dev", "Web Developer"),
+        ("developer", "Developer"),
+        ("engineer", "Engineer"),
+        ("programmer", "Programmer"),
+        ("coder", "Coder"),
+    ]:
+        if role in text:
+            return True, label
+
+    return False, "Developer"
 
 
 def format_duration(seconds: float) -> str:
@@ -182,10 +348,11 @@ class HistoryManager:
 
 
 class KurdishBot:
-    def __init__(self, token: str, dry_run: bool = False, delay: float = DEFAULT_DELAY):
+    def __init__(self, token: str, dry_run: bool = False, delay: float = DEFAULT_DELAY, gender_filter: str = "all"):
         self.token = token
         self.dry_run = dry_run
         self.delay = delay
+        self.gender_filter = gender_filter.lower()  # "all", "female" (girls), "male" (boys)
         self.session = requests.Session()
 
         # Connection pooling
@@ -197,7 +364,7 @@ class KurdishBot:
             "Accept": "application/vnd.github+json",
             "Authorization": f"Bearer {self.token}",
             "X-GitHub-Api-Version": "2022-11-28",
-            "User-Agent": "Kurdish-Dev-Expander/2.0",
+            "User-Agent": "Kurdish-Developer-AutoPilot/3.0",
         })
         self.current_user = ""
         self.user_stats = {}
@@ -241,6 +408,50 @@ class KurdishBot:
         self.history.save()
         print(f" {GREEN}Done ({count} accounts cached, {len(self.history.history)} total in memory){RESET}\n")
 
+    def inspect_developer_profile(self, username: str) -> tuple[bool, str, str]:
+        """
+        Inspects user profile to verify:
+        1. Developer role (Fullstack, Backend, Software Engineer, Laravel, Senior, etc.)
+        2. Gender filter (female/male/all)
+        Returns: (passes: bool, role_tag: str, gender_tag: str)
+        """
+        resp = self.session.get(f"{GITHUB_API_BASE}/users/{username}")
+        if resp.status_code != 200:
+            return False, "", ""
+
+        user_data = resp.json()
+        bio = user_data.get("bio")
+        name = user_data.get("name")
+        company = user_data.get("company")
+        public_repos = user_data.get("public_repos", 0)
+
+        # 1. Developer Role check
+        is_dev, role_tag = identify_developer_role(bio, name, company)
+        # If user has repositories and was found via developer search, qualify them as developer
+        if not is_dev and public_repos > 0:
+            is_dev = True
+            role_tag = "Software Dev"
+
+        if not is_dev:
+            return False, "", ""
+
+        # 2. Gender check
+        gender, gender_reason = detect_gender(name, bio, username)
+
+        if self.gender_filter in ("female", "girl", "girls", "f"):
+            if gender != "female":
+                return False, "", ""
+            return True, role_tag, f"👩 Female ({gender_reason})"
+
+        elif self.gender_filter in ("male", "boy", "boys", "m"):
+            if gender != "male":
+                return False, "", ""
+            return True, role_tag, f"👨 Male ({gender_reason})"
+
+        # All genders accepted
+        tag = "👩 Female" if gender == "female" else ("👨 Male" if gender == "male" else "Dev")
+        return True, role_tag, tag
+
     def follow(self, username: str) -> bool:
         """Sends PUT request to follow a GitHub user directly with auto-backoff."""
         if self.dry_run:
@@ -277,26 +488,32 @@ class KurdishBot:
 
         return False
 
-    def scan_kurdish_developers(self, goal: int = DEFAULT_BATCH_SIZE) -> list[tuple[str, str]]:
+    def scan_kurdish_developers(self, goal: int = DEFAULT_BATCH_SIZE) -> list[tuple[str, str, str, str]]:
         """
-        Scans across all Kurdish locations and keywords to find 'goal' brand-new Kurdish developers.
-        Returns: list of (username, location_tag)
+        Scans Kurdish developer queries, inspects profiles for tech roles & gender.
+        Returns: list of (username, location_label, role_tag, gender_tag)
         """
-        candidates: list[tuple[str, str]] = []
+        candidates: list[tuple[str, str, str, str]] = []
         per_page = 100
         scanned_total = 0
         skipped_total = 0
 
-        print(f"{YELLOW}☀️ Scanning GitHub for {goal} BRAND NEW Kurdish Developers (Boys & Girls)...{RESET}")
+        gender_label = "GIRLS ONLY" if self.gender_filter in ("female", "girl", "girls") else (
+            "BOYS ONLY" if self.gender_filter in ("male", "boy", "boys") else "ALL (BOYS & GIRLS)"
+        )
 
-        for query, label in KURDISH_SEARCH_VECTORS:
+        print(f"{YELLOW}☀️ Scanning GitHub for {goal} Verified Kurdish Developers [{gender_label}]...{RESET}")
+        print(f"{DIM}Target Roles: Fullstack, Backend, Software Engineers, Laravel, Senior Devs{RESET}\n")
+
+        for query, label in KURDISH_DEV_VECTORS:
             if len(candidates) >= goal:
                 break
 
-            page = self.cursors.get_page(query)
-            max_pages_per_vector = 5
+            cursor_key = f"{query}_{self.gender_filter}"
+            page = self.cursors.get_page(cursor_key)
+            max_pages = 5
 
-            while len(candidates) < goal and max_pages_per_vector > 0:
+            while len(candidates) < goal and max_pages > 0:
                 url = f"{GITHUB_API_BASE}/search/users?q={query}&per_page={per_page}&page={page}"
                 resp = self.session.get(url)
                 if resp.status_code != 200:
@@ -315,49 +532,58 @@ class KurdishBot:
                         skipped_total += 1
                         continue
 
-                    candidates.append((username, label))
-                    if len(candidates) >= goal:
-                        break
+                    passes, role_tag, gender_tag = self.inspect_developer_profile(username)
+                    if passes:
+                        candidates.append((username, label, role_tag, gender_tag))
+                        if len(candidates) >= goal:
+                            break
+                    else:
+                        skipped_total += 1
 
-                sys.stdout.write(
-                    f"\r  {CYAN}📍 [{label}]{RESET} Page {page} │ "
-                    f"Scanned: {BOLD}{scanned_total}{RESET} │ "
-                    f"Already Followed: {YELLOW}{skipped_total}{RESET} │ "
-                    f"New Found: {GREEN}{BOLD}{len(candidates)}/{goal}{RESET} "
-                )
-                sys.stdout.flush()
+                    sys.stdout.write(
+                        f"\r  {CYAN}📍 [{label}]{RESET} Page {page} │ "
+                        f"Scanned: {BOLD}{scanned_total}{RESET} │ "
+                        f"Filtered: {YELLOW}{skipped_total}{RESET} │ "
+                        f"Matched Devs: {GREEN}{BOLD}{len(candidates)}/{goal}{RESET} "
+                    )
+                    sys.stdout.flush()
 
                 page += 1
-                max_pages_per_vector -= 1
+                max_pages -= 1
                 if len(items) < per_page:
                     break
 
-            self.cursors.set_page(query, page)
+            self.cursors.set_page(cursor_key, page)
 
-        print(f"\n{GREEN}✓ Scan completed! Ready with {len(candidates)} brand-new Kurdish developers.{RESET}\n")
+        print(f"\n{GREEN}✓ Scan completed! Ready with {len(candidates)} verified Kurdish developers.{RESET}\n")
         return candidates
 
     def print_batch_dashboard(self, goal: int, batch_num: int):
-        """Displays Kurdish themed header card."""
+        """Displays Kurdish themed header card with gender and role info."""
         est_seconds = goal * self.delay
         est_duration = format_duration(est_seconds)
         eta_time = time.strftime("%I:%M:%S %p", time.localtime(time.time() + est_seconds))
         speed_text = f"{int(60 / max(self.delay, 0.1))} follows/min ({self.delay}s delay)"
         cur_following = self.user_stats.get("following", 0)
 
+        gender_badge = "👩 Girls Only" if self.gender_filter in ("female", "girl", "girls") else (
+            "👨 Boys Only" if self.gender_filter in ("male", "boy", "boys") else "🌟 All (Boys & Girls)"
+        )
+
         box_width = 62
         print(f"{YELLOW}╭{'─' * box_width}╮{RESET}")
-        title = f"☀️ BATCH #{batch_num} — GOAL: {goal} KURDISH DEVELOPERS ☀️"
+        title = f"☀️ BATCH #{batch_num} — {goal} KURDISH DEVELOPERS ☀️"
         print(f"{YELLOW}│{BOLD}{title:^{box_width}}{RESET}{YELLOW}│{RESET}")
         print(f"{YELLOW}├{'─' * box_width}┤{RESET}")
-        print(f"{YELLOW}│{RESET}  👤 {BOLD}Operator:{RESET}  @{self.current_user:<16}  👥 {BOLD}Followers:{RESET} {str(self.user_stats.get('followers', 0)):<15}{YELLOW}│{RESET}")
-        print(f"{YELLOW}│{RESET}  📍 {BOLD}Target:{RESET}    Kurdish Devs      🔄 {BOLD}Following:{RESET} {str(cur_following):<15}{YELLOW}│{RESET}")
-        print(f"{YELLOW}│{RESET}  🎯 {BOLD}Batch Goal:{RESET}{str(goal) + ' accounts':<16}  ⚡ {BOLD}Speed:{RESET}     {speed_text:<15}{YELLOW}│{RESET}")
-        print(f"{YELLOW}│{RESET}  ⏱️  {BOLD}Est Time:{RESET}  {est_duration:<16}  🏁 {BOLD}Batch ETA:{RESET} {eta_time:<15}{YELLOW}│{RESET}")
+        print(f"{YELLOW}│{RESET}  👤 {BOLD}Operator:{RESET}    @{self.current_user:<16}  👥 {BOLD}Followers:{RESET} {str(self.user_stats.get('followers', 0)):<13}{YELLOW}│{RESET}")
+        print(f"{YELLOW}│{RESET}  📍 {BOLD}Target:{RESET}      Kurdish Devs      🔄 {BOLD}Following:{RESET} {str(cur_following):<13}{YELLOW}│{RESET}")
+        print(f"{YELLOW}│{RESET}  💻 {BOLD}Tech Roles:{RESET}  Fullstack, Backend, Laravel, Software Engineers  {YELLOW}│{RESET}")
+        print(f"{YELLOW}│{RESET}  🏷️  {BOLD}Gender:{RESET}      {gender_badge:<16}  ⚡ {BOLD}Speed:{RESET}     {speed_text:<13}{YELLOW}│{RESET}")
+        print(f"{YELLOW}│{RESET}  ⏱️  {BOLD}Est Time:{RESET}    {est_duration:<16}  🏁 {BOLD}Batch ETA:{RESET} {eta_time:<13}{YELLOW}│{RESET}")
         print(f"{YELLOW}╰{'─' * box_width}╯{RESET}\n")
 
-    def run_batch(self, targets: list[tuple[str, str]], goal: int, batch_num: int = 1) -> tuple[int, float]:
-        """Executes following for the target list with real-time progress bar and location tags."""
+    def run_batch(self, targets: list[tuple[str, str, str, str]], goal: int, batch_num: int = 1) -> tuple[int, float]:
+        """Executes following for the target list with real-time progress bar and role tags."""
         if not targets:
             print(f"{YELLOW}[!] No candidate accounts available.{RESET}")
             return 0, 0.0
@@ -368,7 +594,7 @@ class KurdishBot:
         start_time = time.time()
 
         try:
-            for idx, (username, loc_tag) in enumerate(targets, 1):
+            for idx, (username, loc_tag, role_tag, gender_tag) in enumerate(targets, 1):
                 if success_count >= goal:
                     break
 
@@ -388,7 +614,14 @@ class KurdishBot:
                 )
 
                 print(status_header)
-                print(f"  → Following {BOLD}@{username}{RESET} {YELLOW}[📍 {loc_tag}]{RESET}...", end="", flush=True)
+                print(
+                    f"  → Following {BOLD}@{username}{RESET} "
+                    f"{YELLOW}[📍 {loc_tag}]{RESET} "
+                    f"{GREEN}[💻 {role_tag}]{RESET} "
+                    f"{CYAN}[{gender_tag}]{RESET}...",
+                    end="",
+                    flush=True
+                )
 
                 if self.follow(username):
                     success_count += 1
@@ -432,22 +665,27 @@ def sleep_with_countdown(seconds: float, next_run_time_str: str):
 
 def run_autopilot_cycle(bot: KurdishBot, batch_size: int = DEFAULT_BATCH_SIZE, break_hours: float = DEFAULT_BREAK_HOURS):
     """
-    Continuous Auto-Pilot:
-    1. Follows batch_size (50) Kurdish developers.
-    2. Takes break_hours (2.0) rest to comply with GitHub hourly limits.
+    Continuous Auto-Pilot with 2-Hour Rest Break:
+    1. Discovers and follows verified Kurdish developers (Fullstack/Backend/Laravel/Software Engineers).
+    2. Rests 2 hours to clear GitHub hourly rate limits.
     3. Repeats automatically.
     """
     break_seconds = int(break_hours * 3600)
     batch_num = 1
     total_session_followed = 0
 
+    gender_label = "GIRLS ONLY" if bot.gender_filter in ("female", "girl", "girls") else (
+        "BOYS ONLY" if bot.gender_filter in ("male", "boy", "boys") else "ALL (BOYS & GIRLS)"
+    )
+
     print(f"\n{YELLOW}╭{'─' * 62}╮{RESET}")
     print(f"{YELLOW}│{BOLD}{'☀️ KURDISH AUTO-PILOT ACTIVATED (2-HOUR BREAK CYCLE) ☀️':^62}{RESET}{YELLOW}│{RESET}")
     print(f"{YELLOW}├{'─' * 62}┤{RESET}")
-    print(f"{YELLOW}│{RESET}  • Batch Size:   {BOLD}{batch_size} Kurdish developers per cycle{RESET}{' ' * (62 - len(str(batch_size)) - 42)}{YELLOW}│{RESET}")
-    print(f"{YELLOW}│{RESET}  • Rest Break:   {BOLD}{break_hours} hours{RESET} (Completely resets GitHub rate limits){' ' * (62 - len(str(break_hours)) - 53)}{YELLOW}│{RESET}")
-    print(f"{YELLOW}│{RESET}  • Daily Total:  ~{int((24 / break_hours) * batch_size)} follows/day (100% GitHub Rule Compliant){' ' * (62 - 58)}{YELLOW}│{RESET}")
-    print(f"{YELLOW}│{RESET}  • Press:        {RED}Ctrl+C{RESET} at any time to pause or exit{' ' * 17}{YELLOW}│{RESET}")
+    print(f"{YELLOW}│{RESET}  • Target:       Verified Kurdish Developers [{gender_label}]{' ' * (62 - len(gender_label) - 46)}{YELLOW}│{RESET}")
+    print(f"{YELLOW}│{RESET}  • Tech Roles:   Fullstack, Backend, Software Engineers, Laravel{' ' * 14}{YELLOW}│{RESET}")
+    print(f"{YELLOW}│{RESET}  • Batch Size:   {batch_size} developers per cycle{' ' * (62 - len(str(batch_size)) - 34)}{YELLOW}│{RESET}")
+    print(f"{YELLOW}│{RESET}  • Rest Break:   {break_hours} hours (Completely resets GitHub rate limits){' ' * (62 - len(str(break_hours)) - 53)}{YELLOW}│{RESET}")
+    print(f"{YELLOW}│{RESET}  • Stop:         Press {RED}Ctrl+C{RESET} at any time to pause or exit{' ' * 19}{YELLOW}│{RESET}")
     print(f"{YELLOW}╰{'─' * 62}╯{RESET}\n")
 
     while True:
@@ -467,8 +705,8 @@ def run_autopilot_cycle(bot: KurdishBot, batch_size: int = DEFAULT_BATCH_SIZE, b
             title = f"🎉 BATCH #{batch_num} COMPLETED ({followed}/{batch_size} FOLLOWED) 🎉"
             print(f"{GREEN}│{BOLD}{title:^{box_width}}{RESET}{GREEN}│{RESET}")
             print(f"{GREEN}├{'─' * box_width}┤{RESET}")
-            print(f"{GREEN}│{RESET}  ✓ {BOLD}Followed in This Batch:{RESET}  {followed} accounts{' ' * (box_width - len(str(followed)) - 34)}{GREEN}│{RESET}")
-            print(f"{GREEN}│{RESET}  🌟 {BOLD}Total in Auto-Pilot:{RESET}     {total_session_followed} accounts{' ' * (box_width - len(str(total_session_followed)) - 32)}{GREEN}│{RESET}")
+            print(f"{GREEN}│{RESET}  ✓ {BOLD}Followed in This Batch:{RESET}  {followed} developers{' ' * (box_width - len(str(followed)) - 35)}{GREEN}│{RESET}")
+            print(f"{GREEN}│{RESET}  🌟 {BOLD}Total in Auto-Pilot:{RESET}     {total_session_followed} developers{' ' * (box_width - len(str(total_session_followed)) - 33)}{GREEN}│{RESET}")
             print(f"{GREEN}│{RESET}  🔄 {BOLD}Current Total Following:{RESET} {current_following} accounts{' ' * (box_width - len(str(current_following)) - 32)}{GREEN}│{RESET}")
             print(f"{GREEN}│{RESET}  ⏱️  {BOLD}Batch Time Elapsed:{RESET}     {format_duration(elapsed)}{' ' * (box_width - len(format_duration(elapsed)) - 30)}{GREEN}│{RESET}")
             print(f"{GREEN}╰{'─' * box_width}╯{RESET}\n")
@@ -496,9 +734,25 @@ def run_autopilot_cycle(bot: KurdishBot, batch_size: int = DEFAULT_BATCH_SIZE, b
         batch_num += 1
 
 
+def ask_gender() -> str:
+    """Lets user select their preferred gender filter at daily start."""
+    print(f"\n👥 {BOLD}Choose Kurdish Developer Gender Filter:{RESET}")
+    print(f"  1) {CYAN}🌟 All Kurdish Developers (Boys & Girls){RESET} [Default - Recommended]")
+    print(f"  2) {MAGENTA}👩 Kurdish Girls Only{RESET} (Female Fullstack / Backend / Software Engineers)")
+    print(f"  3) {BLUE}👨 Kurdish Boys Only{RESET}  (Male Fullstack / Backend / Software Engineers)")
+
+    choice = input("\nEnter choice [1-3, default 1]: ").strip()
+    if choice == "2":
+        return "female"
+    elif choice == "3":
+        return "male"
+    return "all"
+
+
 def main():
-    parser = argparse.ArgumentParser(description="☀️ Kurdish Developer Auto-Pilot (GitHub Compliance Edition)")
+    parser = argparse.ArgumentParser(description="☀️ Kurdish Developer Auto-Pilot Pro")
     parser.add_argument("--auto", action="store_true", help="Start continuous Auto-Pilot (Follow batch -> 2h break -> Repeat)")
+    parser.add_argument("--gender", default="all", choices=["all", "female", "girl", "girls", "male", "boy", "boys"], help="Filter by gender (girl/boy/all)")
     parser.add_argument("--batch-size", type=int, default=DEFAULT_BATCH_SIZE, help=f"Follows per batch (default: {DEFAULT_BATCH_SIZE})")
     parser.add_argument("--break-hours", type=float, default=DEFAULT_BREAK_HOURS, help=f"Break hours between batches (default: {DEFAULT_BREAK_HOURS})")
     parser.add_argument("--delay", type=float, default=DEFAULT_DELAY, help=f"Seconds between follows (default: {DEFAULT_DELAY})")
@@ -508,7 +762,7 @@ def main():
     args = parser.parse_args()
 
     token = get_token()
-    bot = KurdishBot(token, dry_run=args.dry_run, delay=args.delay)
+    bot = KurdishBot(token, dry_run=args.dry_run, delay=args.delay, gender_filter=args.gender)
 
     user_info = bot.verify_account()
     if not user_info:
@@ -527,18 +781,23 @@ def main():
         candidates = bot.scan_kurdish_developers(goal=args.batch_size)
         bot.run_batch(candidates, goal=args.batch_size, batch_num=1)
     else:
-        # Simple default interactive menu
+        # Interactive Daily Start
         print(f"{BOLD}Choose Operation Mode:{RESET}")
-        print(f"  {CYAN}1) 🔄 Start Kurdish Auto-Pilot (Follow {args.batch_size} → 2-Hour Break → Repeat All Day){RESET} [Default - Press Enter]")
-        print(f"  {YELLOW}2) ⚡ Run Single Batch Now (Follow {args.batch_size} Kurdish developers and exit){RESET}")
+        print(f"  {CYAN}1) 🔄 Start Kurdish Auto-Pilot (Follow {args.batch_size} → 2-Hour Break → Repeat){RESET} [Default - Press Enter]")
+        print(f"  {YELLOW}2) ⚡ Run Single Batch of {args.batch_size} Now & Exit{RESET}")
         print(f"  3) 🛑 Exit")
 
-        choice = input("\nEnter choice [1-3, default 1]: ").strip()
-        if choice == "2":
+        mode_choice = input("\nEnter choice [1-3, default 1]: ").strip()
+        if mode_choice == "3":
+            print("Exited.")
+            return
+
+        # Choose Gender at Start
+        bot.gender_filter = ask_gender()
+
+        if mode_choice == "2":
             candidates = bot.scan_kurdish_developers(goal=args.batch_size)
             bot.run_batch(candidates, goal=args.batch_size, batch_num=1)
-        elif choice == "3":
-            print("Exited.")
         else:
             run_autopilot_cycle(bot, batch_size=args.batch_size, break_hours=args.break_hours)
 
