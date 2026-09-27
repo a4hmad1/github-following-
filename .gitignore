@@ -2,5 +2,7 @@
 followed_history.json
 page_cursor.json
 daily_state.json
+follows.log
+*.log
 __pycache__/
 *.pyc

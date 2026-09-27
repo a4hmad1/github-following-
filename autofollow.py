@@ -28,6 +28,7 @@ ENV_PATH = BASE_DIR / ".env"
 HISTORY_PATH = BASE_DIR / "followed_history.json"
 CURSOR_PATH = BASE_DIR / "page_cursor.json"
 DAILY_STATE_PATH = BASE_DIR / "daily_state.json"
+FOLLOWS_LOG_PATH = BASE_DIR / "follows.log"
 GITHUB_API_BASE = "https://api.github.com"
 
 # Kurdish Flag / Theme Colors (Red, Green, Yellow, Cyan, White)
@@ -316,10 +317,12 @@ class CursorManager:
 
 
 class HistoryManager:
-    """Tracks users already processed in-memory and on disk to prevent duplicates."""
-    def __init__(self, path: Path):
+    """Tracks users already processed in-memory and on disk to prevent duplicates and logs activity."""
+    def __init__(self, path: Path, log_path: Path | None = None):
         self.path = path
+        self.log_path = log_path or FOLLOWS_LOG_PATH
         self.history: set[str] = set()
+        self.records: list[dict] = []
         self.load()
 
     def load(self):
@@ -328,13 +331,18 @@ class HistoryManager:
                 with open(self.path, "r", encoding="utf-8") as f:
                     data = json.load(f)
                     self.history = set(data.get("followed", []))
+                    self.records = data.get("records", [])
             except Exception:
                 self.history = set()
+                self.records = []
 
     def save(self):
         try:
             with open(self.path, "w", encoding="utf-8") as f:
-                json.dump({"followed": sorted(list(self.history))}, f, indent=2)
+                json.dump({
+                    "followed": sorted(list(self.history)),
+                    "records": self.records
+                }, f, indent=2)
         except Exception as e:
             print(f"{YELLOW}[!] Failed to save history: {e}{RESET}")
 
@@ -342,6 +350,31 @@ class HistoryManager:
         self.history.add(username.lower())
         if auto_save:
             self.save()
+
+    def add_record(self, username: str, loc_tag: str = "", role_tag: str = "", gender_tag: str = ""):
+        """Records followed developer into history list, rich record store, and follows.log text file."""
+        self.history.add(username.lower())
+        now_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        record = {
+            "timestamp": now_str,
+            "username": username,
+            "url": f"https://github.com/{username}",
+            "location": loc_tag,
+            "role": role_tag,
+            "gender": gender_tag
+        }
+        self.records.append(record)
+        self.save()
+
+        # Write to human-readable follows.log
+        try:
+            with open(self.log_path, "a", encoding="utf-8") as f:
+                f.write(
+                    f"[{now_str}] FOLLOWED: @{username:<20} | URL: https://github.com/{username:<25} | "
+                    f"Role: {role_tag:<22} | Gender: {gender_tag:<20} | Location: {loc_tag}\n"
+                )
+        except Exception:
+            pass
 
     def contains(self, username: str) -> bool:
         return username.lower() in self.history
@@ -452,8 +485,8 @@ class KurdishBot:
         tag = "👩 Female" if gender == "female" else ("👨 Male" if gender == "male" else "Dev")
         return True, role_tag, tag
 
-    def follow(self, username: str) -> bool:
-        """Sends PUT request to follow a GitHub user directly with auto-backoff."""
+    def follow(self, username: str, loc_tag: str = "", role_tag: str = "", gender_tag: str = "") -> bool:
+        """Sends PUT request to follow a GitHub user directly with auto-backoff and logging."""
         if self.dry_run:
             return True
 
@@ -464,7 +497,7 @@ class KurdishBot:
         for attempt in range(max_retries):
             resp = self.session.put(f"{GITHUB_API_BASE}/user/following/{username}")
             if resp.status_code == 204:
-                self.history.add(username, auto_save=True)
+                self.history.add_record(username, loc_tag=loc_tag, role_tag=role_tag, gender_tag=gender_tag)
                 return True
 
             if resp.status_code in (403, 429):
@@ -623,12 +656,14 @@ class KurdishBot:
                     flush=True
                 )
 
-                if self.follow(username):
+                if self.follow(username, loc_tag=loc_tag, role_tag=role_tag, gender_tag=gender_tag):
                     success_count += 1
                     if self.dry_run:
                         print(f" {YELLOW}[DRY-RUN]{RESET}")
                     else:
-                        print(f" {GREEN}✓ Followed!{RESET}")
+                        now_time = datetime.now().strftime("%H:%M:%S")
+                        print(f" {GREEN}✓ Followed!{RESET} {DIM}(Logged at {now_time}){RESET}")
+                        print(f"    {DIM}↳ 🔗 https://github.com/{username}  [Saved in follows.log]{RESET}")
                 else:
                     print(f" {RED}✗ Skipped{RESET}")
 
@@ -734,6 +769,73 @@ def run_autopilot_cycle(bot: KurdishBot, batch_size: int = DEFAULT_BATCH_SIZE, b
         batch_num += 1
 
 
+def show_follow_log(bot: KurdishBot, limit: int = 30):
+    """Displays a clean formatted table of followed users from history and log file."""
+    total_followed = len(bot.history.history)
+    records = bot.history.records
+    total_records = len(records)
+
+    box_width = 78
+    print(f"\n{CYAN}╭{'─' * box_width}╮{RESET}")
+    title = "📜 KURDISH DEVELOPER FOLLOW LOG & HISTORY"
+    print(f"{CYAN}│{BOLD}{title:^{box_width}}{RESET}{CYAN}│{RESET}")
+    print(f"{CYAN}├{'─' * box_width}┤{RESET}")
+    print(f"{CYAN}│{RESET}  • Total Accounts in Database:  {BOLD}{total_followed}{RESET}{' ' * (box_width - len(str(total_followed)) - 35)}{CYAN}│{RESET}")
+    print(f"{CYAN}│{RESET}  • Detailed Follow Log Records: {BOLD}{total_records}{RESET}{' ' * (box_width - len(str(total_records)) - 35)}{CYAN}│{RESET}")
+    print(f"{CYAN}│{RESET}  • Activity Log File:           {BOLD}{str(bot.history.log_path.name)}{RESET}{' ' * (box_width - len(str(bot.history.log_path.name)) - 35)}{CYAN}│{RESET}")
+    print(f"{CYAN}╰{'─' * box_width}╯{RESET}\n")
+
+    if records:
+        display_records = list(records[-limit:])
+        display_records.reverse()
+
+        print(f"{BOLD}{'#':<4} {'Date & Time':<20} {'Developer':<20} {'Role':<22} {'Gender':<12}{RESET}")
+        print(f"{DIM}{'─' * box_width}{RESET}")
+
+        for idx, r in enumerate(display_records, 1):
+            ts = r.get("timestamp", "Unknown")
+            uname = f"@{r.get('username', '')}"
+            role = r.get("role", "Developer")
+            gender = r.get("gender", "")
+            url = r.get("url", f"https://github.com/{r.get('username', '')}")
+            loc = r.get("location", "")
+
+            print(f"{idx:02d}.  {ts:<20} {BOLD}{uname:<20}{RESET} {GREEN}{role:<22}{RESET} {CYAN}{gender:<12}{RESET}")
+            print(f"     {DIM}↳ 🔗 {url}  [📍 {loc}]{RESET}")
+
+        print(f"\n{GREEN}✓ Showing {len(display_records)} most recent logged follows (out of {total_records} records).{RESET}")
+    elif total_followed > 0:
+        usernames = sorted(list(bot.history.history), reverse=True)[:limit]
+        print(f"{YELLOW}Showing last {len(usernames)} followed usernames from database (total: {total_followed}):{RESET}\n")
+        for i, u in enumerate(usernames, 1):
+            print(f"  {DIM}{i:02d}.{RESET} {BOLD}@{u:<24}{RESET} 🔗 https://github.com/{u}")
+        print(f"\n{DIM}Note: New follows with this version will record timestamp, tech role, and gender in follows.log.{RESET}")
+    else:
+        print(f"{YELLOW}[!] No follow records logged yet. Run Auto-Pilot or a batch to start following!{RESET}")
+
+    print(f"\n{DIM}📁 Full live log file is saved to: {bot.history.log_path.resolve()}{RESET}\n")
+
+    # Quick search prompt if interactive
+    if sys.stdin.isatty():
+        try:
+            query = input(f"{CYAN}🔍 Enter a username to check if already followed (or press Enter to return): {RESET}").strip().lstrip("@")
+            if query:
+                if bot.history.contains(query):
+                    matching = [r for r in records if r.get("username", "").lower() == query.lower()]
+                    print(f"\n{GREEN}✓ YES! You have already followed @{query}.{RESET}")
+                    if matching:
+                        m = matching[-1]
+                        print(f"  • Date/Time: {m.get('timestamp')}")
+                        print(f"  • Role:      {m.get('role')}")
+                        print(f"  • Gender:    {m.get('gender')}")
+                        print(f"  • Location:  {m.get('location')}")
+                    print(f"  • Profile:   https://github.com/{query}\n")
+                else:
+                    print(f"\n{YELLOW}✗ @{query} has NOT been followed yet.{RESET}\n")
+        except (EOFError, KeyboardInterrupt):
+            pass
+
+
 def ask_gender() -> str:
     """Lets user select their preferred gender filter at daily start."""
     print(f"\n👥 {BOLD}Choose Kurdish Developer Gender Filter:{RESET}")
@@ -757,6 +859,7 @@ def main():
     parser.add_argument("--break-hours", type=float, default=DEFAULT_BREAK_HOURS, help=f"Break hours between batches (default: {DEFAULT_BREAK_HOURS})")
     parser.add_argument("--delay", type=float, default=DEFAULT_DELAY, help=f"Seconds between follows (default: {DEFAULT_DELAY})")
     parser.add_argument("--once", action="store_true", help="Run only one single batch now and exit")
+    parser.add_argument("--log", nargs="?", const=30, type=int, help="Show log of followed users (default: last 30)")
     parser.add_argument("--dry-run", action="store_true", help="Simulate without making actual follow requests")
 
     args = parser.parse_args()
@@ -772,6 +875,10 @@ def main():
     print(f"{GREEN}{BOLD}✓ Authenticated as @{user_info.get('login')}{RESET}")
     print(f"  Followers: {user_info.get('followers')} | Following: {user_info.get('following')}\n")
 
+    if args.log is not None:
+        show_follow_log(bot, limit=args.log)
+        return
+
     # Sync following list
     bot.preload_current_following()
 
@@ -781,25 +888,37 @@ def main():
         candidates = bot.scan_kurdish_developers(goal=args.batch_size)
         bot.run_batch(candidates, goal=args.batch_size, batch_num=1)
     else:
-        # Interactive Daily Start
-        print(f"{BOLD}Choose Operation Mode:{RESET}")
-        print(f"  {CYAN}1) 🔄 Start Kurdish Auto-Pilot (Follow {args.batch_size} → 2-Hour Break → Repeat){RESET} [Default - Press Enter]")
-        print(f"  {YELLOW}2) ⚡ Run Single Batch of {args.batch_size} Now & Exit{RESET}")
-        print(f"  3) 🛑 Exit")
+        while True:
+            # Interactive Daily Start
+            print(f"{BOLD}Choose Operation Mode:{RESET}")
+            print(f"  {CYAN}1) 🔄 Start Kurdish Auto-Pilot (Follow {args.batch_size} → 2-Hour Break → Repeat){RESET} [Default - Press Enter]")
+            print(f"  {YELLOW}2) ⚡ Run Single Batch of {args.batch_size} Now & Exit{RESET}")
+            print(f"  {MAGENTA}3) 📜 View Follow Log & History (Show users you have followed){RESET}")
+            print(f"  4) 🛑 Exit")
 
-        mode_choice = input("\nEnter choice [1-3, default 1]: ").strip()
-        if mode_choice == "3":
-            print("Exited.")
-            return
+            mode_choice = input("\nEnter choice [1-4, default 1]: ").strip()
+            if mode_choice == "4":
+                print("Exited.")
+                return
+            elif mode_choice == "3":
+                show_follow_log(bot)
+                try:
+                    input(f"\n{DIM}Press Enter to return to main menu...{RESET}")
+                except (EOFError, KeyboardInterrupt):
+                    return
+                print()
+                continue
 
-        # Choose Gender at Start
-        bot.gender_filter = ask_gender()
+            # Choose Gender at Start
+            bot.gender_filter = ask_gender()
 
-        if mode_choice == "2":
-            candidates = bot.scan_kurdish_developers(goal=args.batch_size)
-            bot.run_batch(candidates, goal=args.batch_size, batch_num=1)
-        else:
-            run_autopilot_cycle(bot, batch_size=args.batch_size, break_hours=args.break_hours)
+            if mode_choice == "2":
+                candidates = bot.scan_kurdish_developers(goal=args.batch_size)
+                bot.run_batch(candidates, goal=args.batch_size, batch_num=1)
+                break
+            else:
+                run_autopilot_cycle(bot, batch_size=args.batch_size, break_hours=args.break_hours)
+                break
 
 
 if __name__ == "__main__":

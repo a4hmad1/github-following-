@@ -151,6 +151,24 @@ python3 autofollow.py --once
 
 ---
 
+### 5. View Follow Log & Check Followed Users
+To view recently followed developers with timestamps, roles, gender tags, and profile URLs:
+```bash
+# View last 30 followed developers:
+python3 autofollow.py --log
+
+# View last 50 followed developers:
+python3 autofollow.py --log 50
+```
+Or open the menu with `python3 autofollow.py` and select **`3) 📜 View Follow Log & History`**. You can also enter any username to verify if they have already been followed!
+
+All follows are also logged in plain text in **`follows.log`**:
+```text
+[2026-09-27 21:25:01] FOLLOWED: @dalalkurdish       | URL: https://github.com/dalalkurdish    | Role: Frontend Developer     | Gender: 👩 Female (name 'Dalal') | Location: Kurdistan • Dev
+```
+
+---
+
 ## 📄 License
 
 Distributed under the **MIT License**. See `LICENSE` for more information.
