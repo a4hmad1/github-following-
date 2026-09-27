@@ -3,7 +3,8 @@
 GitHub Network Expander Pro
 A high-performance CLI tool to expand your GitHub network in 250-account batches.
 
-Key Scanning & Deduplication Features:
+Features:
+- Gender Filter Engine (Girls / Boys / All): Scans profile pronouns, bio keywords, real name, and username.
 - Pre-Scan Engine: Live on-screen scan that checks and filters out all previously-followed accounts.
 - Persistent Page Cursor (page_cursor.json): Never re-scans old pages; always finds fresh new accounts.
 - Zero-Duplicate Guarantee ("Not Again"): Multiple in-memory and disk checks ensure no user is ever followed twice.
@@ -40,6 +41,122 @@ RESET = "\033[0m"
 
 BATCH_SIZE = 250
 DEFAULT_DELAY = 0.5  # Turbo speed: 0.5s
+
+# ==========================================
+# Comprehensive Gender Detection Datasets
+# ==========================================
+FEMALE_PRONOUNS = [
+    "she/her", "she / her", "she/hers", "she / hers", "she/they", "she / they",
+    "her/she", "she/them", "they/she", "her / she"
+]
+
+MALE_PRONOUNS = [
+    "he/him", "he / him", "he/his", "he / his", "he/they", "he / they",
+    "him/he", "he/them", "they/he", "him / he"
+]
+
+FEMALE_BIO_KEYWORDS = [
+    "woman in tech", "women in tech", "women who code", "girls who code",
+    "pyladies", "shecodes", "djangogirls", "railsgirls", "girlscript",
+    "female developer", "female software engineer", "girl developer",
+    "mother", "mom", "lady", "sister", "wife", "queen", "actress"
+]
+
+MALE_BIO_KEYWORDS = [
+    "father", "dad", "husband", "brother", "guy", "boy developer", "king"
+]
+
+# Comprehensive Female First Names (Western, Arabic, Middle Eastern, Asian, Hispanic, Slavic)
+FEMALE_NAMES = {
+    # English & Western
+    "sarah", "sara", "emily", "jessica", "ashley", "amanda", "jennifer", "stephanie", "nicole",
+    "elizabeth", "megan", "hannah", "rachel", "lauren", "samantha", "victoria", "chloe", "olivia",
+    "emma", "ava", "sophia", "isabella", "mia", "charlotte", "amelia", "harper", "evelyn", "abigail",
+    "ella", "camila", "luna", "sofia", "avery", "millie", "grace", "zoey", "penelope", "lily",
+    "eleanor", "lillian", "addison", "aubrey", "ellie", "stella", "natalie", "zoe", "leah", "hazel",
+    "violet", "aurora", "savannah", "audrey", "brooklyn", "bella", "claire", "skylar", "lucy",
+    "anna", "caroline", "genesis", "emilia", "kennedy", "maya", "willow", "kinsley", "naomi",
+    "elena", "ariana", "allison", "gabriella", "alice", "madelyn", "cora", "ruby", "eva", "clara",
+    "julia", "laura", "maria", "alina", "daria", "natasha", "polina", "valeria", "yulia", "anastasia",
+    "daphne", "chelsea", "diana", "helen", "nancy", "linda", "patricia", "barbara", "susan", "karen",
+    "lisa", "betty", "margaret", "dorothy", "sandra", "carol", "ruth", "sharon", "michelle", "laura",
+    "kimberly", "deborah", "amy", "angela", "rebecca", "cynthia", "kathleen", "pamela", "vanessa",
+    # Arabic & Middle Eastern
+    "fatima", "fatimah", "zahra", "maryam", "mariam", "noor", "nour", "zainab", "zeinab", "aya",
+    "ayah", "layla", "leila", "yasmin", "yasmine", "reem", "rania", "salma", "huda", "mona", "dina",
+    "nada", "maha", "lina", "leena", "amina", "khadija", "khadeeja", "asma", "hanan", "rasha",
+    "rola", "samira", "dalal", "bushra", "iman", "amal", "duaa", "israa", "marwa", "shaimaa",
+    "heba", "hager", "rawan", "shahad", "raghad", "hala", "ghada", "sahar", "manar", "naglaa",
+    # Asian & Hispanic
+    "sakura", "yuki", "mei", "lin", "xia", "yoko", "haruka", "aiko", "priya", "ananya", "deepa",
+    "pooja", "neha", "sneha", "kavita", "sunita", "lucia", "martina", "valeria", "paula", "daniela"
+}
+
+# Comprehensive Male First Names
+MALE_NAMES = {
+    # English & Western
+    "john", "james", "robert", "michael", "william", "david", "richard", "joseph", "thomas",
+    "charles", "christopher", "daniel", "matthew", "anthony", "mark", "donald", "steven", "paul",
+    "andrew", "joshua", "kenneth", "kevin", "brian", "george", "edward", "ronald", "timothy",
+    "jason", "jeffrey", "ryan", "jacob", "gary", "nicholas", "eric", "jonathan", "stephen",
+    "larry", "justin", "scott", "brandon", "benjamin", "samuel", "gregory", "frank", "alexander",
+    "raymond", "patrick", "jack", "dennis", "jerry", "tyler", "aaron", "jose", "adam", "nathan",
+    "henry", "douglas", "zachary", "peter", "kyle", "walter", "ethan", "jeremy", "harold", "keith",
+    "christian", "roger", "noah", "gerald", "carl", "terry", "sean", "austin", "arthur", "lawrence",
+    "jesse", "dylan", "bryan", "joe", "jordan", "billy", "albert", "bruce", "willie", "gabriel",
+    "logan", "lucas", "mason", "oliver", "liam", "elias", "julian", "leo", "theodore", "ezra",
+    # Arabic & Middle Eastern
+    "ahmad", "ahmed", "mohammed", "muhammad", "ali", "omar", "hussein", "hassan", "mustafa",
+    "ibrahim", "khalid", "youssef", "yousef", "tariq", "bilal", "zayd", "hamza", "karim", "amr",
+    "abdullah", "abdul", "saad", "tamer", "mahmoud", "fadi", "rami", "wail", "samer", "ziad",
+    "hisham", "yasin", "faisal", "nasser", "adel", "bassem", "osama", "waleed", "saleh", "marwan"
+}
+
+
+def detect_gender(name: str | None, bio: str | None, username: str) -> tuple[str, str]:
+    """
+    Detects profile gender based on pronouns, bio keywords, real name, and username.
+    Returns: (gender: "female" | "male" | "unknown", reason: str)
+    """
+    text = f"{name or ''} {bio or ''}".lower()
+
+    # 1. Highest Confidence: Declared Pronouns
+    for p in FEMALE_PRONOUNS:
+        if p in text:
+            return "female", f"pronouns '{p}'"
+
+    for p in MALE_PRONOUNS:
+        if p in text:
+            return "male", f"pronouns '{p}'"
+
+    # 2. Bio Keywords
+    for kw in FEMALE_BIO_KEYWORDS:
+        if kw in text:
+            return "female", f"bio '{kw}'"
+
+    for kw in MALE_BIO_KEYWORDS:
+        if kw in text:
+            return "male", f"bio '{kw}'"
+
+    # 3. Real Name First Name matching
+    if name:
+        clean_first = "".join(c for c in name.strip().split()[0].lower() if c.isalpha())
+        if clean_first in FEMALE_NAMES:
+            return "female", f"name '{clean_first.capitalize()}'"
+        if clean_first in MALE_NAMES:
+            return "male", f"name '{clean_first.capitalize()}'"
+
+    # 4. Username Prefix matching
+    uname_lower = username.lower()
+    for fn in FEMALE_NAMES:
+        if len(fn) >= 4 and uname_lower.startswith(fn):
+            return "female", f"username '{fn}'"
+
+    for mn in MALE_NAMES:
+        if len(mn) >= 4 and uname_lower.startswith(mn):
+            return "male", f"username '{mn}'"
+
+    return "unknown", "none"
 
 
 def format_duration(seconds: float) -> str:
@@ -165,10 +282,11 @@ class HistoryManager:
 
 
 class GitHubBot:
-    def __init__(self, token: str, dry_run: bool = False, delay: float = DEFAULT_DELAY):
+    def __init__(self, token: str, dry_run: bool = False, delay: float = DEFAULT_DELAY, gender_filter: str = "all"):
         self.token = token
         self.dry_run = dry_run
         self.delay = delay
+        self.gender_filter = gender_filter.lower()  # "all", "female" (girls), "male" (boys)
         self.session = requests.Session()
 
         # Connection pooling
@@ -180,7 +298,7 @@ class GitHubBot:
             "Accept": "application/vnd.github+json",
             "Authorization": f"Bearer {self.token}",
             "X-GitHub-Api-Version": "2022-11-28",
-            "User-Agent": "GitHub-Network-Expander/6.0",
+            "User-Agent": "GitHub-Network-Expander/7.0",
         })
         self.current_user = ""
         self.user_stats = {}
@@ -224,12 +342,34 @@ class GitHubBot:
         self.history.save()
         print(f" {GREEN}Done ({count} accounts cached, {len(self.history.history)} total in memory){RESET}\n")
 
+    def inspect_candidate(self, username: str) -> tuple[bool, str]:
+        """
+        Validates if username passes the gender filter.
+        Returns: (passes: bool, reason: str)
+        """
+        if self.gender_filter in ("all", "*"):
+            return True, "all"
+
+        # Fetch profile metadata for gender inspection
+        resp = self.session.get(f"{GITHUB_API_BASE}/users/{username}")
+        if resp.status_code != 200:
+            return False, "api_error"
+
+        user_data = resp.json()
+        gender, reason = detect_gender(user_data.get("name"), user_data.get("bio"), username)
+
+        if self.gender_filter in ("female", "girl", "girls", "f"):
+            return (gender == "female"), reason
+        elif self.gender_filter in ("male", "boy", "boys", "m"):
+            return (gender == "male"), reason
+
+        return True, "all"
+
     def follow(self, username: str) -> bool:
         """Sends PUT request to follow a GitHub user directly with auto-backoff."""
         if self.dry_run:
             return True
 
-        # Safety Check 1: In-memory duplicate check
         if self.history.contains(username):
             return False
 
@@ -240,7 +380,6 @@ class GitHubBot:
                 self.history.add(username, auto_save=True)
                 return True
 
-            # Handle Secondary Rate Limit / Abuse Detection
             if resp.status_code in (403, 429):
                 retry_after = resp.headers.get("Retry-After")
                 reset_time = resp.headers.get("x-ratelimit-reset")
@@ -256,24 +395,26 @@ class GitHubBot:
                 continue
 
             if resp.status_code == 404:
-                print(f" {YELLOW}(Not Found){RESET}", end="")
                 return False
 
-            print(f" {RED}(HTTP {resp.status_code}){RESET}", end="")
             return False
 
         return False
 
-    def get_followers_of(self, target_user: str, count: int = BATCH_SIZE) -> list[str]:
-        """Scans followers of a target, skipping already-followed accounts, to gather count fresh accounts."""
+    def get_followers_of(self, target_user: str, count: int = BATCH_SIZE) -> list[tuple[str, str]]:
+        """Scans followers of a target, filtering by gender and previous follows."""
         clean_user = clean_input(target_user)
-        candidates = []
-        page = self.cursors.get_page(f"followers_{clean_user}")
+        candidates: list[tuple[str, str]] = []
+        page = self.cursors.get_page(f"followers_{clean_user}_{self.gender_filter}")
         per_page = 100
         scanned_total = 0
         skipped_total = 0
 
-        print(f"{CYAN}🔍 Pre-scanning @{clean_user} followers for {count} BRAND NEW accounts...{RESET}")
+        gender_desc = "GIRLS / FEMALE" if self.gender_filter in ("female", "girl", "girls") else (
+            "BOYS / MALE" if self.gender_filter in ("male", "boy", "boys") else "ALL"
+        )
+
+        print(f"{CYAN}🔍 Pre-scanning @{clean_user} for {count} BRAND NEW [{gender_desc}] accounts...{RESET}")
 
         while len(candidates) < count:
             url = f"{GITHUB_API_BASE}/users/{clean_user}/followers?per_page={per_page}&page={page}"
@@ -290,42 +431,48 @@ class GitHubBot:
                 username = item["login"]
                 scanned_total += 1
 
-                # Filter out: already followed OR self
                 if self.history.contains(username) or username.lower() == self.current_user.lower():
                     skipped_total += 1
-                else:
-                    candidates.append(username)
+                    continue
+
+                passes, reason = self.inspect_candidate(username)
+                if passes:
+                    candidates.append((username, reason))
                     if len(candidates) >= count:
                         break
+                else:
+                    skipped_total += 1
 
-            # Live on-screen scanner status
-            sys.stdout.write(
-                f"\r  {CYAN}→ Page {page}{RESET} │ "
-                f"Scanned: {BOLD}{scanned_total}{RESET} │ "
-                f"Already Followed (Filtered): {YELLOW}{skipped_total}{RESET} │ "
-                f"New Found: {GREEN}{BOLD}{len(candidates)}/{count}{RESET} "
-            )
-            sys.stdout.flush()
+                sys.stdout.write(
+                    f"\r  {CYAN}→ Page {page}{RESET} │ "
+                    f"Scanned: {BOLD}{scanned_total}{RESET} │ "
+                    f"Filtered: {YELLOW}{skipped_total}{RESET} │ "
+                    f"Matched ({gender_desc}): {GREEN}{BOLD}{len(candidates)}/{count}{RESET} "
+                )
+                sys.stdout.flush()
 
             page += 1
             if len(items) < per_page:
                 break
 
-        # Save the current page cursor so next run continues here
-        self.cursors.set_page(f"followers_{clean_user}", max(1, page - 1))
-        print(f"\n{GREEN}✓ Scan completed! Ready with {len(candidates)} brand new accounts.{RESET}")
+        self.cursors.set_page(f"followers_{clean_user}_{self.gender_filter}", max(1, page - 1))
+        print(f"\n{GREEN}✓ Scan completed! Ready with {len(candidates)} brand new matched accounts.{RESET}")
         return candidates
 
-    def get_contributors_of(self, repo: str, count: int = BATCH_SIZE) -> list[str]:
-        """Scans contributors of a repo, skipping already-followed accounts, to gather count fresh accounts."""
+    def get_contributors_of(self, repo: str, count: int = BATCH_SIZE) -> list[tuple[str, str]]:
+        """Scans contributors of a repo, filtering by gender and previous follows."""
         clean_repo = clean_input(repo)
-        candidates = []
-        page = self.cursors.get_page(f"contributors_{clean_repo}")
+        candidates: list[tuple[str, str]] = []
+        page = self.cursors.get_page(f"contributors_{clean_repo}_{self.gender_filter}")
         per_page = 100
         scanned_total = 0
         skipped_total = 0
 
-        print(f"{CYAN}🔍 Pre-scanning {clean_repo} contributors for {count} BRAND NEW accounts...{RESET}")
+        gender_desc = "GIRLS / FEMALE" if self.gender_filter in ("female", "girl", "girls") else (
+            "BOYS / MALE" if self.gender_filter in ("male", "boy", "boys") else "ALL"
+        )
+
+        print(f"{CYAN}🔍 Pre-scanning {clean_repo} for {count} BRAND NEW [{gender_desc}] accounts...{RESET}")
 
         while len(candidates) < count:
             url = f"{GITHUB_API_BASE}/repos/{clean_repo}/contributors?per_page={per_page}&page={page}"
@@ -344,39 +491,53 @@ class GitHubBot:
 
                     if self.history.contains(username) or username.lower() == self.current_user.lower():
                         skipped_total += 1
-                    else:
-                        candidates.append(username)
+                        continue
+
+                    passes, reason = self.inspect_candidate(username)
+                    if passes:
+                        candidates.append((username, reason))
                         if len(candidates) >= count:
                             break
+                    else:
+                        skipped_total += 1
 
-            sys.stdout.write(
-                f"\r  {CYAN}→ Page {page}{RESET} │ "
-                f"Scanned: {BOLD}{scanned_total}{RESET} │ "
-                f"Already Followed (Filtered): {YELLOW}{skipped_total}{RESET} │ "
-                f"New Found: {GREEN}{BOLD}{len(candidates)}/{count}{RESET} "
-            )
-            sys.stdout.flush()
+                    sys.stdout.write(
+                        f"\r  {CYAN}→ Page {page}{RESET} │ "
+                        f"Scanned: {BOLD}{scanned_total}{RESET} │ "
+                        f"Filtered: {YELLOW}{skipped_total}{RESET} │ "
+                        f"Matched ({gender_desc}): {GREEN}{BOLD}{len(candidates)}/{count}{RESET} "
+                    )
+                    sys.stdout.flush()
 
             page += 1
             if len(items) < per_page:
                 break
 
-        self.cursors.set_page(f"contributors_{clean_repo}", max(1, page - 1))
-        print(f"\n{GREEN}✓ Scan completed! Ready with {len(candidates)} brand new accounts.{RESET}")
+        self.cursors.set_page(f"contributors_{clean_repo}_{self.gender_filter}", max(1, page - 1))
+        print(f"\n{GREEN}✓ Scan completed! Ready with {len(candidates)} brand new matched accounts.{RESET}")
         return candidates
 
-    def search_users(self, query: str, count: int = BATCH_SIZE) -> list[str]:
-        """Scans GitHub search results, skipping already-followed accounts, to gather count fresh accounts."""
-        candidates = []
-        page = self.cursors.get_page(f"search_{query}")
+    def search_users(self, query: str, count: int = BATCH_SIZE) -> list[tuple[str, str]]:
+        """Scans GitHub search results, filtering by gender and previous follows."""
+        candidates: list[tuple[str, str]] = []
+        page = self.cursors.get_page(f"search_{query}_{self.gender_filter}")
         per_page = 100
         scanned_total = 0
         skipped_total = 0
 
-        print(f"{CYAN}🔍 Pre-scanning search '{query}' for {count} BRAND NEW accounts...{RESET}")
+        # Set display label for gender
+        effective_query = query
+        if self.gender_filter in ("female", "girl", "girls"):
+            gender_desc = "GIRLS / FEMALE"
+        elif self.gender_filter in ("male", "boy", "boys"):
+            gender_desc = "BOYS / MALE"
+        else:
+            gender_desc = "ALL"
+
+        print(f"{CYAN}🔍 Pre-scanning search '{effective_query}' for {count} BRAND NEW [{gender_desc}] accounts...{RESET}")
 
         while len(candidates) < count:
-            url = f"{GITHUB_API_BASE}/search/users?q={query}&per_page={per_page}&page={page}"
+            url = f"{GITHUB_API_BASE}/search/users?q={effective_query}&per_page={per_page}&page={page}"
             resp = self.session.get(url)
             if resp.status_code != 200:
                 break
@@ -392,34 +553,43 @@ class GitHubBot:
 
                 if self.history.contains(username) or username.lower() == self.current_user.lower():
                     skipped_total += 1
-                else:
-                    candidates.append(username)
+                    continue
+
+                passes, reason = self.inspect_candidate(username)
+                if passes:
+                    candidates.append((username, reason))
                     if len(candidates) >= count:
                         break
+                else:
+                    skipped_total += 1
 
-            sys.stdout.write(
-                f"\r  {CYAN}→ Page {page}{RESET} │ "
-                f"Scanned: {BOLD}{scanned_total}{RESET} │ "
-                f"Already Followed (Filtered): {YELLOW}{skipped_total}{RESET} │ "
-                f"New Found: {GREEN}{BOLD}{len(candidates)}/{count}{RESET} "
-            )
-            sys.stdout.flush()
+                sys.stdout.write(
+                    f"\r  {CYAN}→ Page {page}{RESET} │ "
+                    f"Scanned: {BOLD}{scanned_total}{RESET} │ "
+                    f"Filtered: {YELLOW}{skipped_total}{RESET} │ "
+                    f"Matched ({gender_desc}): {GREEN}{BOLD}{len(candidates)}/{count}{RESET} "
+                )
+                sys.stdout.flush()
 
             page += 1
             if len(items) < per_page:
                 break
 
-        self.cursors.set_page(f"search_{query}", max(1, page - 1))
-        print(f"\n{GREEN}✓ Scan completed! Ready with {len(candidates)} brand new accounts.{RESET}")
+        self.cursors.set_page(f"search_{query}_{self.gender_filter}", max(1, page - 1))
+        print(f"\n{GREEN}✓ Scan completed! Ready with {len(candidates)} brand new matched accounts.{RESET}")
         return candidates
 
     def print_batch_header(self, batch_num: int, target_label: str, goal: int):
-        """Displays a clean, styled dashboard card."""
+        """Displays a clean, styled dashboard card with gender filter badge."""
         est_seconds = goal * self.delay
         est_duration = format_duration(est_seconds)
         eta_time = time.strftime("%I:%M:%S %p", time.localtime(time.time() + est_seconds))
         speed_text = f"~{int(60 / max(self.delay, 0.1))} follows/min ({self.delay}s delay)"
         cur_following = self.user_stats.get("following", 0)
+
+        gender_badge = "👩 Girls Only" if self.gender_filter in ("female", "girl", "girls") else (
+            "👨 Boys Only" if self.gender_filter in ("male", "boy", "boys") else "🌟 All (Boys & Girls)"
+        )
 
         box_width = 62
         print(f"\n{CYAN}╭{'─' * box_width}╮{RESET}")
@@ -428,11 +598,11 @@ class GitHubBot:
         print(f"{CYAN}├{'─' * box_width}┤{RESET}")
         print(f"{CYAN}│{RESET}  👤 {BOLD}Operator:{RESET}  @{self.current_user:<16}  👥 {BOLD}Followers:{RESET} {str(self.user_stats.get('followers', 0)):<15}{CYAN}│{RESET}")
         print(f"{CYAN}│{RESET}  🎯 {BOLD}Source:{RESET}    {target_label:<16}  🔄 {BOLD}Following:{RESET} {str(cur_following):<15}{CYAN}│{RESET}")
-        print(f"{CYAN}│{RESET}  🎯 {BOLD}Batch Goal:{RESET}{str(goal) + ' NEW accounts':<16}  ⚡ {BOLD}Speed:{RESET}     {speed_text:<15}{CYAN}│{RESET}")
+        print(f"{CYAN}│{RESET}  🏷️  {BOLD}Filter:{RESET}    {gender_badge:<16}  ⚡ {BOLD}Speed:{RESET}     {speed_text:<15}{CYAN}│{RESET}")
         print(f"{CYAN}│{RESET}  ⏱️  {BOLD}Est Time:{RESET}  {est_duration:<16}  🏁 {BOLD}Batch ETA:{RESET} {eta_time:<15}{CYAN}│{RESET}")
         print(f"{CYAN}╰{'─' * box_width}╯{RESET}\n")
 
-    def run_batch(self, targets: list[str], goal: int, batch_num: int, target_label: str) -> tuple[int, float]:
+    def run_batch(self, targets: list[tuple[str, str]], goal: int, batch_num: int, target_label: str) -> tuple[int, float]:
         """Executes a single batch with real-time percentage progress bar and timers."""
         if not targets:
             print(f"{YELLOW}[!] No candidate accounts available.{RESET}")
@@ -444,30 +614,33 @@ class GitHubBot:
         start_time = time.time()
 
         try:
-            for idx, username in enumerate(targets, 1):
+            for idx, (username, reason) in enumerate(targets, 1):
                 if success_count >= goal:
                     break
 
-                # Double-check before follow: never follow twice
                 if self.history.contains(username) or username.lower() == self.current_user.lower():
                     continue
 
-                # Live timer calculations
                 rem_needed = goal - success_count
                 rem_seconds = rem_needed * self.delay
                 eta_clock = time.strftime("%I:%M:%S %p", time.localtime(time.time() + rem_seconds))
                 bar_str = render_progress_bar(success_count, goal, width=18)
                 rem_str = format_duration(rem_seconds)
 
-                # Unified progress line
                 status_header = (
                     f"{bar_str} {BOLD}{success_count}/{goal}{RESET} "
                     f"│ ⏱️ Rem: {CYAN}{rem_str}{RESET} "
                     f"│ 🏁 ETA: {MAGENTA}{eta_clock}{RESET}"
                 )
 
+                gender_tag = ""
+                if self.gender_filter in ("female", "girl", "girls"):
+                    gender_tag = f" {MAGENTA}[👩 {reason}]{RESET}"
+                elif self.gender_filter in ("male", "boy", "boys"):
+                    gender_tag = f" {BLUE}[👨 {reason}]{RESET}"
+
                 print(status_header)
-                print(f"  → Following {BOLD}@{username}{RESET}...", end="", flush=True)
+                print(f"  → Following {BOLD}@{username}{RESET}{gender_tag}...", end="", flush=True)
 
                 if self.follow(username):
                     success_count += 1
@@ -488,6 +661,21 @@ class GitHubBot:
 
         batch_elapsed = time.time() - start_time
         return success_count, batch_elapsed
+
+
+def ask_gender() -> str:
+    """Lets user select their preferred gender filter."""
+    print(f"\n👥 {BOLD}Select Profile Filter (Boy / Girl):{RESET}")
+    print(f"  1) {CYAN}🌟 All Profiles (Boys & Girls){RESET} [Default - Fastest]")
+    print(f"  2) {MAGENTA}👩 Girls / Female Only{RESET} (Scans pronouns, bio, name)")
+    print(f"  3) {BLUE}👨 Boys / Male Only{RESET}   (Scans pronouns, bio, name)")
+
+    choice = input("\nEnter choice [1-3, default 1]: ").strip()
+    if choice == "2":
+        return "female"
+    elif choice == "3":
+        return "male"
+    return "all"
 
 
 def ask_speed() -> float:
@@ -514,7 +702,6 @@ def run_continuous_session(bot: GitHubBot, mode: str, target_val: str, batch_siz
     target_label = f"@{target_val}" if mode == "user" else target_val
 
     while True:
-        # Pre-scan fresh candidates for this batch
         if mode == "user":
             candidates = bot.get_followers_of(target_val, count=batch_size)
         elif mode == "search":
@@ -522,11 +709,16 @@ def run_continuous_session(bot: GitHubBot, mode: str, target_val: str, batch_siz
         elif mode == "repo":
             candidates = bot.get_contributors_of(target_val, count=batch_size)
         else:
-            candidates = [clean_input(u) for u in target_val.split(",") if clean_input(u)]
-            candidates = [u for u in candidates if not bot.history.contains(u)]
+            raw_list = [clean_input(u) for u in target_val.split(",") if clean_input(u)]
+            candidates = []
+            for u in raw_list:
+                if not bot.history.contains(u):
+                    passes, reason = bot.inspect_candidate(u)
+                    if passes:
+                        candidates.append((u, reason))
 
         if not candidates:
-            print(f"\n{YELLOW}[!] No more fresh unfollowed accounts found from {target_label}.{RESET}")
+            print(f"\n{YELLOW}[!] No more fresh matched accounts found from {target_label}.{RESET}")
             break
 
         followed, elapsed = bot.run_batch(candidates, goal=batch_size, batch_num=batch_num, target_label=target_label)
@@ -549,7 +741,6 @@ def run_continuous_session(bot: GitHubBot, mode: str, target_val: str, batch_siz
         print(f"{GREEN}│{RESET}  ⏱️  {BOLD}Batch Time Elapsed:{RESET}       {format_duration(elapsed)}{' ' * (box_width - len(format_duration(elapsed)) - 32)}{GREEN}│{RESET}")
         print(f"{GREEN}╰{'─' * box_width}╯{RESET}\n")
 
-        # Prompt user to continue or stop
         print(f"{BOLD}What would you like to do next?{RESET}")
         print(f"  {CYAN}{BOLD}1) 🚀 Start following NEXT {batch_size} accounts{RESET} [Press Enter]")
         print(f"  {YELLOW}2) 🛑 Stop and exit session{RESET}")
@@ -586,11 +777,13 @@ def run_interactive(bot: GitHubBot):
     if choice == "1":
         target = input("\nEnter company or user account (e.g. google, microsoft): ").strip()
         cleaned = clean_input(target)
+        bot.gender_filter = ask_gender()
         bot.delay = ask_speed()
         run_continuous_session(bot, mode="user", target_val=cleaned, batch_size=BATCH_SIZE)
 
     elif choice == "2":
         query = input("\nEnter search keywords (e.g. location:Iraq language:python): ").strip()
+        bot.gender_filter = ask_gender()
         bot.delay = ask_speed()
         run_continuous_session(bot, mode="search", target_val=query, batch_size=BATCH_SIZE)
 
@@ -599,11 +792,13 @@ def run_interactive(bot: GitHubBot):
         cleaned_repo = clean_input(raw_repo)
         if "/" not in cleaned_repo:
             cleaned_repo = f"{cleaned_repo}/{cleaned_repo}"
+        bot.gender_filter = ask_gender()
         bot.delay = ask_speed()
         run_continuous_session(bot, mode="repo", target_val=cleaned_repo, batch_size=BATCH_SIZE)
 
     elif choice == "4":
         raw = input("\nEnter usernames (separated by commas): ").strip()
+        bot.gender_filter = ask_gender()
         bot.delay = ask_speed()
         run_continuous_session(bot, mode="list", target_val=raw, batch_size=BATCH_SIZE)
 
@@ -612,13 +807,14 @@ def run_interactive(bot: GitHubBot):
 
 
 def main():
-    parser = argparse.ArgumentParser(description="GitHub Network Expander Pro")
+    parser = argparse.ArgumentParser(description="GitHub Network Expander Pro (With Gender Detection)")
     parser.add_argument("--user", help="Target company or user account (e.g. 'google', 'microsoft')")
     parser.add_argument("--search", help="Search query (e.g. 'location:Iraq')")
     parser.add_argument("--repo", help="Target repository (e.g. 'facebook/react') to follow contributors")
     parser.add_argument("--list", help="Comma-separated list of usernames")
     parser.add_argument("--limit", type=int, default=BATCH_SIZE, help=f"Batch size (default: {BATCH_SIZE})")
     parser.add_argument("--delay", type=float, default=DEFAULT_DELAY, help=f"Seconds between follows (default: {DEFAULT_DELAY})")
+    parser.add_argument("--gender", default="all", choices=["all", "female", "girl", "male", "boy"], help="Filter by gender (female/girl, male/boy, all)")
     parser.add_argument("--turbo", action="store_true", help="Run at max speed (0.5s delay)")
     parser.add_argument("--dry-run", action="store_true", help="Simulate without making actual follow requests")
 
@@ -627,7 +823,7 @@ def main():
     delay = 0.5 if args.turbo else args.delay
 
     token = get_token()
-    bot = GitHubBot(token, dry_run=args.dry_run, delay=delay)
+    bot = GitHubBot(token, dry_run=args.dry_run, delay=delay, gender_filter=args.gender)
 
     user_info = bot.verify_account()
     if not user_info:

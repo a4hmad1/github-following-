@@ -31,7 +31,9 @@
 ## ✨ Key Features
 
 - **⚡ Turbo Engine (~150 Follows/min)**: Reuses HTTP keep-alive connection pooling (`requests.adapters.HTTPAdapter`) to eliminate TLS handshake overhead.
+- **👩/👨 Intelligent Gender Filter**: Filter profiles to target **Girls / Female** or **Boys / Male** by scanning profile pronouns (`she/her`, `he/him`), bio keywords, real names, and usernames.
 - **🔄 Smart 250 Batch Workflow**: Automatically follows 250 fresh accounts, displays completion stats, and prompts you to continue with the next 250 or stop.
+- **🔍 Live Pre-Scan Engine**: Actively scans and filters candidate lists before following to guarantee 100% brand-new accounts.
 - **📊 Unified Progress Dashboard**: Sleek Cyan & Emerald Green theme with live percentage progress bar, remaining countdown timer, and exact finishing ETA.
 - **🧠 In-Memory Smart Cache**: Bulk pre-syncs your current following list into memory at launch. Eliminates redundant check requests, doubling execution speed.
 - **🛡️ Adaptive Rate-Limit Shield**: Actively inspects response headers (`x-ratelimit-reset`, `Retry-After`). Pauses automatically during rate limit cooldowns and resumes without dying.
@@ -147,7 +149,19 @@ python3 autofollow.py --repo facebook/react
 python3 autofollow.py --repo flutter/flutter
 ```
 
-#### D. Dry-Run Mode (Simulation)
+#### D. Filter by Gender (Girls or Boys)
+```bash
+# Follow ONLY girls/female developers from Google
+python3 autofollow.py --user google --gender girl
+
+# Follow ONLY girls/female developers from a search query
+python3 autofollow.py --search "location:Iraq" --gender girl
+
+# Follow ONLY boys/male developers
+python3 autofollow.py --user microsoft --gender boy
+```
+
+#### E. Dry-Run Mode (Simulation)
 Preview targets without sending real follow requests:
 ```bash
 python3 autofollow.py --user google --dry-run
