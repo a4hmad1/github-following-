@@ -1,9 +1,7 @@
 name: 🚀 Developer Auto-Pilot (Cloud 24/7)
 
 on:
-  schedule:
-    # Runs every 30 minutes in GitHub cloud
-    - cron: '*/30 * * * *'
+  # Manual dispatch is always available when needed
   workflow_dispatch:
     inputs:
       batch_size:
@@ -23,12 +21,18 @@ on:
         required: false
         default: 'all'
 
+  # NOTE: Frequent scheduled cron (e.g. every 30m) consumes ~3,000-4,500 runner minutes/month,
+  # which exceeds the 2,000 free minutes on GitHub Free and can lock Actions due to billing.
+  # Uncomment only if your GitHub account has an active paid spending limit or extra minutes.
+  # schedule:
+  #   - cron: '0 */6 * * *' # Example: run every 6 hours instead of every 30m to stay within free limits
+
 permissions:
   contents: write
 
 jobs:
   autopilot:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - name: 📥 Check out repository
         uses: actions/checkout@v4
