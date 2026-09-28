@@ -90,16 +90,12 @@ if ! ps -p "$PID" > /dev/null 2>&1; then
 fi
 echo "$PID" > "$PID_FILE"
 
-# Setup automatic resume on reboot if not already present
-CRON_JOB="@reboot cd $DIR && /bin/bash start.sh -d > /dev/null 2>&1"
+# Setup automatic resume on reboot & 10-minute watchdog to keep working 24/7 all the time
+CRON_REBOOT="@reboot cd $DIR && /bin/bash start.sh -d > /dev/null 2>&1"
+CRON_WATCHDOG="*/10 * * * * cd $DIR && /bin/bash start.sh -d > /dev/null 2>&1"
 CURRENT_CRON=$(crontab -l 2>/dev/null || true)
-if echo "$CURRENT_CRON" | grep -F "start.sh" >/dev/null 2>&1; then
-    # Update existing cron to ensure -d flag is present
-    UPDATED_CRON=$(echo "$CURRENT_CRON" | grep -v -F "start.sh" || true)
-    (echo "$UPDATED_CRON"; echo "$CRON_JOB") | grep -v '^$' | crontab - 2>/dev/null || true
-else
-    (echo "$CURRENT_CRON"; echo "$CRON_JOB") | grep -v '^$' | crontab - 2>/dev/null || true
-fi
+CLEANED_CRON=$(echo "$CURRENT_CRON" | grep -v -F "start.sh" || true)
+(echo "$CLEANED_CRON"; echo "$CRON_REBOOT"; echo "$CRON_WATCHDOG") | grep -v '^$' | crontab - 2>/dev/null || true
 
 echo -e "\n${GREEN}╭──────────────────────────────────────────────────────────────╮${RESET}"
 echo -e "${GREEN}│${BOLD}      🚀 DEVELOPER AUTO-PILOT IS NOW WORKING 24/7!             ${RESET}${GREEN}│${RESET}"

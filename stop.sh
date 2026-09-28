@@ -50,6 +50,13 @@ if [ -n "$STRAY" ]; then
     STOPPED=1
 fi
 
+# Remove crontab auto-resume entries
+CURRENT_CRON=$(crontab -l 2>/dev/null || true)
+if echo "$CURRENT_CRON" | grep -F "start.sh" >/dev/null 2>&1; then
+    (echo "$CURRENT_CRON" | grep -v -F "start.sh") | crontab - 2>/dev/null || true
+    echo -e "${YELLOW}ℹ️  Removed auto-start crontab entries. Run ./start.sh anytime to restart.${RESET}"
+fi
+
 if [ "$STOPPED" -eq 0 ]; then
     echo -e "${YELLOW}[!] Auto-Pilot was not currently running.${RESET}"
 fi
