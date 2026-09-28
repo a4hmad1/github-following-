@@ -125,16 +125,24 @@ python3 autofollow.py --log 30
 
 ---
 
-## ☁️ Cloud 24/7 (GitHub Actions)
+## ☁️ Cloud vs Local Execution
 
-If you turn off or shut down your personal computer, GitHub Actions can continue following developers in the cloud:
+### 1. 🖥️ Recommended: Local 24/7 Service (Free & Unlimited)
+Running the bot on your local computer via `./start.sh` is completely free, does not use GitHub Actions runner minutes, and will never encounter GitHub Actions billing restrictions:
+- Automatically boots on startup via `@reboot` cron.
+- Runs silently in the background with automatic anti-ban rest shields.
+- Command: `./start.sh` (check with `./status.sh`).
 
+### 2. ☁️ Cloud (GitHub Actions)
+If you want to trigger runs from the cloud:
 1. Open your repository: [**`a4hmad1/github-following-`**](https://github.com/a4hmad1/github-following-)
 2. Go to **Settings** ➔ **Secrets and variables** ➔ **Actions**
 3. Add a **Repository Secret**:
    - Name: `GH_PAT`
    - Value: Your GitHub Personal Access Token (`ghp_...`) with `user:follow` scope.
-4. The workflow in [`.github/workflows/autopilot.yml`](file:///home/ahmad/github-auto-follower/.github/workflows/autopilot.yml) runs every **30 minutes** in GitHub's cloud, runs a batch, and syncs history back to your repository!
+4. Go to **Actions** ➔ **Developer Auto-Pilot** ➔ **Run workflow** to dispatch on-demand batches.
+> [!NOTE]
+> Free GitHub accounts have an included quota of 2,000 Action runner minutes per month. Continuous cron schedules (every 30m) consume ~3,500+ minutes/month and may cause GitHub to pause Actions due to billing limits until reset.
 
 ---
 
